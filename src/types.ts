@@ -63,6 +63,7 @@ export interface PromptState {
   playerId: string;
   attackerId?: string;
   sourceId?: string;
+  targetId?: string;
   message?: string;
   validTargets?: string[];
 }

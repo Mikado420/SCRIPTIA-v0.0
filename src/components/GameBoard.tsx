@@ -12,7 +12,7 @@ interface Props {
   onInspect: (card: any) => void;
 }
 
-const SystemIcon = ({ sys }: { sys: string }) => {
+const SystemIcon: React.FC<{ sys: string }> = ({ sys }) => {
   switch (sys) {
     case 'Fire': return <Flame size={16} className="text-red-500" />;
     case 'Water': return <Droplet size={16} className="text-blue-500" />;
@@ -195,7 +195,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
                    <span className="text-xs font-bold text-blue-400 mr-2">ARCANA</span>
                    <span className="font-mono font-bold text-lg">{opp.currentArcana}/{opp.maxArcana}</span>
                    <div className="flex ml-2">
-                      {Array.from(new Set(opp.arcana.map(a => getCard(a.cardId).system))).map(sys => <SystemIcon key={sys} sys={sys} />)}
+                      {Array.from(new Set(opp.arcana.map(a => getCard(a.cardId).system))).map(sys => <SystemIcon key={sys as string} sys={sys as string} />)}
                    </div>
                 </div>
                 <div className="flex space-x-1 bg-black/50 px-3 py-1.5 rounded-full border border-yellow-900/50 cursor-pointer">
@@ -236,7 +236,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
                    <span className="text-xs font-bold text-blue-400 mr-2">ARCANA</span>
                    <span className="font-mono font-bold text-lg">{me.currentArcana}/{me.maxArcana}</span>
                    <div className="flex ml-2">
-                      {Array.from(new Set(me.arcana.map(a => getCard(a.cardId).system))).map(sys => <SystemIcon key={sys} sys={sys} />)}
+                      {Array.from(new Set(me.arcana.map(a => getCard(a.cardId).system))).map(sys => <SystemIcon key={sys as string} sys={sys as string} />)}
                    </div>
                 </div>
              </div>
