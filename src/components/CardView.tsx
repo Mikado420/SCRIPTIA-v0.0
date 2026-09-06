@@ -143,7 +143,7 @@ export const CardView: React.FC<CardViewProps> = ({
         )}
 
         {/* Name Bar */}
-        <div className="pt-2.5 px-0.5 pb-0.5 bg-black/60 text-[8px] font-bold text-center leading-none truncate text-white">
+        <div className="pt-2.5 px-0.5 pb-0.5 bg-black/60 text-center truncate whitespace-nowrap overflow-hidden text-[8px] leading-tight font-bold tracking-tight text-white">
           {card.name}
         </div>
 
@@ -208,10 +208,10 @@ export const CardView: React.FC<CardViewProps> = ({
 
         {/* Name and Type */}
         <div className="pt-3 px-1 pb-0.5 bg-black/50 text-center">
-          <div className="text-[8.5px] font-black text-white leading-tight line-clamp-2">
+          <div className="truncate whitespace-nowrap overflow-hidden text-[10px] leading-tight font-bold tracking-tight text-white">
             {card.name}
           </div>
-          <div className="text-[6.5px] text-amber-300/80 font-bold uppercase tracking-tight">
+          <div className="text-[6.5px] text-amber-300/80 font-bold uppercase tracking-tight truncate">
             {typeMap[card.type] || card.type} {card.lineage ? `• ${lineageMap[card.lineage] || card.lineage}` : ''}
           </div>
         </div>
@@ -255,7 +255,7 @@ export const CardView: React.FC<CardViewProps> = ({
         <div className={`absolute -top-1 -left-1 w-3.5 h-3.5 rounded-full flex items-center justify-center font-black text-[8px] border border-black shadow ${badgeColor}`}>
           {card.cost}
         </div>
-        <div className="pt-2 px-0.5 bg-black/60 text-[7px] font-bold text-center leading-tight truncate text-white">
+        <div className="pt-2 px-0.5 bg-black/60 truncate whitespace-nowrap overflow-hidden text-[7.5px] leading-tight font-bold tracking-tight text-center text-white">
           {card.name}
         </div>
         <div className="text-center text-[6.5px] text-amber-300/80 bg-black/70 py-0.5 uppercase font-bold">
@@ -281,7 +281,7 @@ export const CardView: React.FC<CardViewProps> = ({
         {card.cost}
       </div>
 
-      <div className="px-1 pt-3 pb-1 bg-black/50 text-[10px] font-bold leading-tight min-h-[36px] flex items-center text-center justify-center shadow-inner">
+      <div className="px-1 pt-3 pb-1 bg-black/50 truncate whitespace-nowrap overflow-hidden text-[10px] leading-tight font-bold tracking-tight min-h-[36px] flex items-center text-center justify-center shadow-inner text-white">
         {card.name}
       </div>
 

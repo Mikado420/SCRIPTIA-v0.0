@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "SCRIPTIA - 魔導書TCG",
+  "description": "競技用トレーディングカードゲーム SCRIPTIA（スクリプティア）。横画面対戦デジタルTCG、高知能AIエンジン、ゾーンビューアー、戦場カスタマイズを搭載。",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

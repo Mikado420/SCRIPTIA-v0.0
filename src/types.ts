@@ -91,4 +91,5 @@ export type GameAction =
   | { type: 'DECLARE_ATTACK'; attackerId: string; targetId?: string } 
   | { type: 'RESOLVE_GUARD'; guarderId?: string }
   | { type: 'RESOLVE_TRIGGER'; apply: boolean; targetId?: string }
+  | { type: 'RETRIEVE_FROM_ARCHIVE'; instanceId: string }
   ;

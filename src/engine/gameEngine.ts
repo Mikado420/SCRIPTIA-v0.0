@@ -163,6 +163,25 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
            const randIdx = Math.floor(Math.random() * opp.hand.length);
            opp.archive.push(opp.hand.splice(randIdx, 1)[0]);
         }
+        if (template.id === 'BW-08' && action.targetId) {
+          const aIdx = p.archive.findIndex(c => c.instanceId === action.targetId);
+          if (aIdx !== -1) {
+            const [retrieved] = p.archive.splice(aIdx, 1);
+            p.hand.push(retrieved);
+            newState.log.push(`【予言者 アナスタシア】の効果でアーカイブから 【${getCard(retrieved.cardId).name}】 を手札に戻した。`);
+          }
+        }
+        if (template.id === 'BD-10' && action.targetId) {
+          const targetIds = action.targetId.split(',');
+          targetIds.forEach(tId => {
+            const aIdx = p.archive.findIndex(c => c.instanceId === tId);
+            if (aIdx !== -1) {
+              const [retrieved] = p.archive.splice(aIdx, 1);
+              p.hand.push(retrieved);
+              newState.log.push(`【常闇の悪魔 バグラザード】の効果でアーカイブから 【${getCard(retrieved.cardId).name}】 を手札に戻した。`);
+            }
+          });
+        }
 
       } else if (template.type === 'Evolution') {
         const targetUnit = p.field.find(u => u.instanceId === action.evolutionTargetId);
@@ -358,6 +377,17 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
             });
             newState.log.push(`${player.id} は結界破壊時効果で 【${getCard(card.cardId).name}】 を召喚した。`);
          }
+      }
+      return newState;
+    }
+
+    case 'RETRIEVE_FROM_ARCHIVE': {
+      const p = newState[newState.currentPlayer];
+      const aIdx = p.archive.findIndex(c => c.instanceId === action.instanceId);
+      if (aIdx !== -1) {
+        const [retrieved] = p.archive.splice(aIdx, 1);
+        p.hand.push(retrieved);
+        newState.log.push(`${p.id} はアーカイブから 【${getCard(retrieved.cardId).name}】 を手札に戻した。`);
       }
       return newState;
     }

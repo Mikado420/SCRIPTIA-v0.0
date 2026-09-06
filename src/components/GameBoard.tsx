@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { GameState, GameAction, PlayerState, UnitState } from '../types';
+import { GameState, GameAction, PlayerState, UnitState, CardInstance } from '../types';
 import { CardView } from './CardView';
 import { HandTray } from './HandTray';
 import { getCard } from '../data/cards';
 import { calculateUnitStats } from '../engine/engineUtils';
-import { Shield, Droplet, Flame, Mountain, Sun, Moon, Hexagon, History, X, ChevronRight, Zap } from 'lucide-react';
+import { Shield, Droplet, Flame, Mountain, Sun, Moon, Hexagon, History, X, ChevronRight, Zap, Palette, Archive, Sparkles, Loader2 } from 'lucide-react';
+import { PlaymatSelector, PlaymatThemeId, PLAYMAT_THEMES } from './PlaymatSelector';
+import { ZoneViewerModal, ZoneSelectionConfig } from './ZoneViewerModal';
 
 interface Props {
   state: GameState;
@@ -28,9 +30,39 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
   const [arcanaMode, setArcanaMode] = useState(false);
   const [showLog, setShowLog] = useState(false);
 
+  // Playmat Theme State (persisted in localStorage)
+  const [playmatTheme, setPlaymatTheme] = useState<PlaymatThemeId>(() => {
+    try {
+      const saved = localStorage.getItem('scriptia_playmat');
+      if (saved && PLAYMAT_THEMES.some(t => t.id === saved)) {
+        return saved as PlaymatThemeId;
+      }
+    } catch (e) {
+      // ignore localStorage errors
+    }
+    return 'library';
+  });
+  const [showPlaymatSelector, setShowPlaymatSelector] = useState(false);
+
+  // Zone Viewer Modal State
+  const [zoneModal, setZoneModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    zoneType: 'arcana' | 'archive';
+    cards: CardInstance[];
+    isOpponent?: boolean;
+    selectionMode?: ZoneSelectionConfig | null;
+  }>({
+    isOpen: false,
+    title: '',
+    zoneType: 'arcana',
+    cards: [],
+  });
+
   const me = state.player1;
   const opp = state.player2;
   const isMyTurn = state.currentPlayer === 'player1';
+  const currentTheme = PLAYMAT_THEMES.find(t => t.id === playmatTheme) || PLAYMAT_THEMES[0];
 
   // Deselect on empty click
   const handleBoardClick = () => {
@@ -63,6 +95,68 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
     if (state.phase === 'ACTION') {
       const inHand = me.hand.find(c => c.instanceId === id);
       if (inHand) {
+        const tpl = getCard(inHand.cardId);
+
+        // Recovery Effect Hook for BW-13 (聖者の祈り)
+        if (tpl.id === 'BW-13' && me.archive.some(c => ['Spell', 'Rune'].includes(getCard(c.cardId).type))) {
+          setZoneModal({
+            isOpen: true,
+            title: '【聖者の祈り】回収するスペルまたはルーンを選択',
+            zoneType: 'archive',
+            cards: me.archive,
+            isOpponent: false,
+            selectionMode: {
+              promptText: '手札に戻すカードを選んでください',
+              canSelect: (cTpl) => cTpl.type === 'Spell' || cTpl.type === 'Rune',
+              onSelect: (chosenId) => {
+                dispatch({ type: 'PLAY_CARD', instanceId: inHand.instanceId, targetId: chosenId });
+                setSelectedCardId(null);
+              },
+            },
+          });
+          return;
+        }
+
+        // Recovery Effect Hook for BW-08 (予言者 アナスタシア)
+        if (tpl.id === 'BW-08' && me.archive.some(c => ['Spell', 'Rune'].includes(getCard(c.cardId).type))) {
+          setZoneModal({
+            isOpen: true,
+            title: '【予言者 アナスタシア】登場時効果：回収カードを選択',
+            zoneType: 'archive',
+            cards: me.archive,
+            isOpponent: false,
+            selectionMode: {
+              promptText: '召喚と同時に手札に戻すスペルまたはルーンを選択',
+              canSelect: (cTpl) => cTpl.type === 'Spell' || cTpl.type === 'Rune',
+              onSelect: (chosenId) => {
+                dispatch({ type: 'PLAY_CARD', instanceId: inHand.instanceId, targetId: chosenId });
+                setSelectedCardId(null);
+              },
+            },
+          });
+          return;
+        }
+
+        // Recovery Effect Hook for BD-10 (常闇の悪魔 バグラザード)
+        if (tpl.id === 'BD-10' && me.archive.some(c => getCard(c.cardId).system === 'Dark')) {
+          setZoneModal({
+            isOpen: true,
+            title: '【常闇の悪魔 バグラザード】登場時効果：闇カード回収',
+            zoneType: 'archive',
+            cards: me.archive,
+            isOpponent: false,
+            selectionMode: {
+              promptText: '手札に戻す闇のカードを選択',
+              canSelect: (cTpl) => cTpl.system === 'Dark',
+              onSelect: (chosenId) => {
+                dispatch({ type: 'PLAY_CARD', instanceId: inHand.instanceId, targetId: chosenId });
+                setSelectedCardId(null);
+              },
+            },
+          });
+          return;
+        }
+
         setSelectedCardId(id === selectedCardId ? null : id);
         return;
       }
@@ -241,11 +335,21 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
 
   return (
     <div
-      className="relative w-full h-full bg-slate-950 text-slate-100 font-sans select-none overflow-hidden flex flex-col justify-between"
+      className="relative w-full h-full text-slate-100 font-sans select-none overflow-hidden flex flex-col justify-between transition-colors duration-500"
+      style={currentTheme.bgStyle}
       onClick={handleBoardClick}
     >
-      {/* Background Arena Texture */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-900/90 via-slate-950 to-black pointer-events-none" />
+      {/* Decorative Center Arcana Glyph */}
+      <div 
+        className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-30"
+        style={{
+          boxShadow: `inset 0 0 100px ${currentTheme.ambientGlow}`,
+        }}
+      >
+        <div className="w-[380px] h-[380px] rounded-full border border-white/5 flex items-center justify-center">
+          <div className="w-[280px] h-[280px] rounded-full border border-dashed border-white/10" />
+        </div>
+      </div>
 
       {/* ========================================================================= */}
       {/* TOP TIER: Opponent HUD & Hand (approx 16% height)                          */}
@@ -269,8 +373,23 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
           <div className="flex flex-col">
             <div className="flex items-center space-x-2">
               <span className="text-[10px] font-black text-slate-300">OPPONENT</span>
-              {/* Arcana */}
-              <div className="flex items-center space-x-1 bg-black/60 px-1.5 py-0.5 rounded text-[10px] border border-blue-500/30">
+
+              {/* Arcana Widget (Clickable to open Zone Viewer) */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setZoneModal({
+                    isOpen: true,
+                    title: '相手のアルカナゾーン',
+                    zoneType: 'arcana',
+                    cards: opp.arcana,
+                    isOpponent: true,
+                  });
+                }}
+                title="相手のアルカナ一覧を確認"
+                className="flex items-center space-x-1 bg-black/60 hover:bg-slate-800 px-1.5 py-0.5 rounded text-[10px] border border-blue-500/40 hover:border-blue-400 transition-colors cursor-pointer shadow"
+              >
                 <span className="text-blue-400 font-bold">ARCANA</span>
                 <span className="font-mono font-black text-white">{opp.currentArcana}/{opp.maxArcana}</span>
                 <div className="flex space-x-0.5 ml-1">
@@ -278,7 +397,28 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
                     <SystemIcon key={sys as string} sys={sys as string} />
                   ))}
                 </div>
-              </div>
+              </button>
+
+              {/* Archive / 墓地 Widget (Clickable to open Zone Viewer) */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setZoneModal({
+                    isOpen: true,
+                    title: '相手のアーカイブ（墓地）',
+                    zoneType: 'archive',
+                    cards: opp.archive,
+                    isOpponent: true,
+                  });
+                }}
+                title="相手のアーカイブを確認"
+                className="flex items-center space-x-1 bg-black/60 hover:bg-slate-800 px-1.5 py-0.5 rounded text-[10px] border border-purple-500/40 hover:border-purple-400 text-purple-300 font-bold transition-colors cursor-pointer shadow"
+              >
+                <Archive size={11} />
+                <span>墓地</span>
+                <span className="font-mono font-black text-white">{opp.archive.length}</span>
+              </button>
             </div>
 
             {/* Barrier Gems */}
@@ -395,8 +535,22 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
 
             <div className="h-3.5 w-px bg-white/20" />
 
-            {/* Arcana Bar */}
-            <div className="flex items-center space-x-1">
+            {/* Arcana Widget (Clickable to open Zone Viewer) */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setZoneModal({
+                  isOpen: true,
+                  title: '自分のアルカナゾーン',
+                  zoneType: 'arcana',
+                  cards: me.arcana,
+                  isOpponent: false,
+                });
+              }}
+              title="自分のアルカナ一覧を確認"
+              className="flex items-center space-x-1 bg-black/60 hover:bg-slate-800 px-2 py-0.5 rounded text-[10px] border border-blue-500/40 hover:border-blue-400 transition-colors cursor-pointer shadow"
+            >
               <span className="text-[10px] font-bold text-blue-400">ARCANA</span>
               <span className="font-mono font-black text-sm text-white">
                 {me.currentArcana}/{me.maxArcana}
@@ -406,7 +560,28 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
                   <SystemIcon key={sys as string} sys={sys as string} />
                 ))}
               </div>
-            </div>
+            </button>
+
+            {/* Player Archive / 墓地 Widget (Clickable to open Zone Viewer) */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setZoneModal({
+                  isOpen: true,
+                  title: '自分のアーカイブ（墓地）',
+                  zoneType: 'archive',
+                  cards: me.archive,
+                  isOpponent: false,
+                });
+              }}
+              title="自分のアーカイブを確認"
+              className="flex items-center space-x-1 bg-black/60 hover:bg-slate-800 px-1.5 py-0.5 rounded text-[10px] border border-purple-500/40 hover:border-purple-400 text-purple-300 font-bold transition-colors cursor-pointer shadow"
+            >
+              <Archive size={11} />
+              <span>墓地</span>
+              <span className="font-mono font-black text-white">{me.archive.length}</span>
+            </button>
           </div>
 
           {/* Player Runes and Domain Slots */}
@@ -464,11 +639,20 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
 
         {/* Right Side: Action Controls & Buttons */}
         <div className="flex flex-col items-end space-y-1.5 shrink-0 z-30 pb-0.5">
-          {/* Top small action row: Turn Info & Combat Log Toggle */}
-          <div className="flex items-center space-x-2">
+          {/* Top small action row: Turn Info, Playmat Customizer & Combat Log Toggle */}
+          <div className="flex items-center space-x-1.5">
             <span className="text-[10px] font-black text-slate-400 bg-black/60 px-2 py-0.5 rounded border border-white/10">
               TURN {state.turnCount}
             </span>
+
+            <button
+              onClick={() => setShowPlaymatSelector(true)}
+              title="プレイマット戦場カスタマイズ"
+              className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-amber-300 hover:text-amber-200 rounded border border-amber-400/30 flex items-center space-x-1 text-[10px] font-bold shadow active:scale-95 transition-colors"
+            >
+              <Palette size={12} />
+              <span>MAT</span>
+            </button>
 
             <button
               onClick={() => setShowLog(!showLog)}
@@ -500,21 +684,31 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
             {/* Turn End / Next Phase Main Button */}
             <button
               onClick={() => {
+                if (!isMyTurn || !!state.prompt) return;
                 dispatch({ type: 'NEXT_PHASE' });
                 setArcanaMode(false);
                 setSelectedCardId(null);
               }}
               disabled={!isMyTurn || !!state.prompt}
-              className={`px-5 py-2.5 rounded-lg font-black tracking-wider text-xs sm:text-sm transition-all shadow-xl active:scale-95 flex items-center space-x-1.5 ${
+              className={`px-4 sm:px-5 py-2.5 rounded-lg font-black tracking-wider text-xs sm:text-sm transition-all shadow-xl active:scale-95 flex items-center space-x-1.5 ${
                 isMyTurn && !state.prompt
                   ? state.phase === 'ARCANA_PLACEMENT'
                     ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-blue-500/20'
                     : 'bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-slate-950 hover:brightness-110 shadow-amber-500/30 ring-2 ring-yellow-300'
-                  : 'bg-slate-800 text-slate-600 border border-slate-700 cursor-not-allowed'
+                  : 'bg-slate-900/90 text-slate-400 border border-slate-700/80 cursor-wait'
               }`}
             >
-              <span>{state.phase === 'ARCANA_PLACEMENT' ? '行動フェーズへ' : 'ターン終了'}</span>
-              <ChevronRight size={15} />
+              {!isMyTurn ? (
+                <>
+                  <Loader2 size={13} className="animate-spin text-amber-400" />
+                  <span>相手の思考中...</span>
+                </>
+              ) : (
+                <>
+                  <span>{state.phase === 'ARCANA_PLACEMENT' ? '行動フェーズへ' : 'ターン終了'}</span>
+                  <ChevronRight size={15} />
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -659,6 +853,30 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
           </button>
         </div>
       )}
+
+      {/* ========================================================================= */}
+      {/* Zone Viewer Modal (Arcana / Archive / Recovery Selection)                  */}
+      {/* ========================================================================= */}
+      <ZoneViewerModal
+        isOpen={zoneModal.isOpen}
+        onClose={() => setZoneModal(prev => ({ ...prev, isOpen: false, selectionMode: null }))}
+        title={zoneModal.title}
+        zoneType={zoneModal.zoneType}
+        cards={zoneModal.cards}
+        isOpponent={zoneModal.isOpponent}
+        selectionMode={zoneModal.selectionMode}
+        onInspect={onInspect}
+      />
+
+      {/* ========================================================================= */}
+      {/* Playmat & Arena Customizer Modal                                          */}
+      {/* ========================================================================= */}
+      <PlaymatSelector
+        isOpen={showPlaymatSelector}
+        onClose={() => setShowPlaymatSelector(false)}
+        currentTheme={playmatTheme}
+        onSelectTheme={(themeId) => setPlaymatTheme(themeId)}
+      />
     </div>
   );
 };
