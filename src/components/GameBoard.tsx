@@ -42,6 +42,25 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
   });
   const [showPlaymatSelector, setShowPlaymatSelector] = useState(false);
 
+  // Auto-fit scaler state for 1000px x 500px virtual canvas (iPhone 13 Landscape & all viewports)
+  const [scale, setScale] = useState(1);
+
+  useEffect(() => {
+    const updateScale = () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const nextScale = Math.min(w / 1000, h / 500);
+      setScale(nextScale);
+    };
+    updateScale();
+    window.addEventListener('resize', updateScale);
+    window.addEventListener('orientationchange', updateScale);
+    return () => {
+      window.removeEventListener('resize', updateScale);
+      window.removeEventListener('orientationchange', updateScale);
+    };
+  }, []);
+
   // Zone Viewer Modal State
   const [zoneModal, setZoneModal] = useState<{
     isOpen: boolean;
@@ -434,329 +453,290 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
 
   return (
     <div
-      className={`fixed inset-0 w-full h-full text-slate-100 font-sans select-none overflow-hidden flex flex-col justify-between transition-colors duration-500 min-h-0 min-w-0 ${
-        isScreenShaking ? 'animate-screen-shake' : ''
-      }`}
-      style={{
-        ...currentTheme.bgStyle,
-        paddingTop: 'max(6px, env(safe-area-inset-top, 0px))',
-        paddingBottom: 'max(6px, env(safe-area-inset-bottom, 0px))',
-        paddingLeft: 'max(10px, env(safe-area-inset-left, 0px))',
-        paddingRight: 'max(10px, env(safe-area-inset-right, 0px))',
-      }}
+      className="fixed inset-0 w-screen h-screen overflow-hidden bg-slate-950 flex items-center justify-center select-none"
       onClick={handleBoardClick}
     >
-      {/* Center Mystic Sigil Background */}
+      {/* Auto-Fit Master Scaled Canvas: strictly 1000px x 500px (2:1 aspect ratio) */}
       <div
-        className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-25"
-        style={{ boxShadow: `inset 0 0 140px ${currentTheme.ambientGlow}` }}
+        style={{
+          width: '1000px',
+          height: '500px',
+          transform: `scale(${scale})`,
+          transformOrigin: 'center center',
+          ...currentTheme.bgStyle,
+        }}
+        className={`relative shrink-0 overflow-hidden flex flex-col justify-between text-slate-100 font-sans shadow-2xl transition-colors duration-500 ${
+          isScreenShaking ? 'animate-screen-shake' : ''
+        }`}
       >
-        <div className="w-[440px] h-[440px] rounded-full border border-white/5 flex items-center justify-center">
-          <div className="w-[320px] h-[320px] rounded-full border border-dashed border-white/10" />
-        </div>
-      </div>
-
-      {/* ========================================================================= */}
-      {/* 1. TOP TIER: Opponent HUD, Centered Status Bar (Avatar + Barriers + Runes)  */}
-      {/* ========================================================================= */}
-      <div className="relative w-full flex items-start justify-between z-30 pointer-events-none shrink-0 min-h-0">
-        {/* Top-Left: Opponent Arcana & Deck/Archive Gauge */}
-        <div className="pointer-events-auto">
-          <ArcanaGauge
-            isOpponent
-            current={opp.currentArcana}
-            max={opp.maxArcana}
-            arcanaCards={opp.arcana}
-            deckCount={opp.deck.length}
-            archiveCount={opp.archive.length}
-            onOpenArcana={() =>
-              setZoneModal({
-                isOpen: true,
-                title: '相手のアルカナゾーン',
-                zoneType: 'arcana',
-                cards: opp.arcana,
-                isOpponent: true,
-              })
-            }
-            onOpenArchive={() =>
-              setZoneModal({
-                isOpen: true,
-                title: '相手のアーカイブ(墓地)',
-                zoneType: 'archive',
-                cards: opp.archive,
-                isOpponent: true,
-              })
-            }
-          />
-        </div>
-
-        {/* Top-Center: Docked Opponent Hand, Avatar, Yellow Barrier Plates & Rune/Domain Sockets */}
-        <div className="flex flex-col items-center pointer-events-auto">
-          {/* Opponent Hand: docked directly to top edge */}
-          <div className="flex items-start justify-center -space-x-2 pb-0.5">
-            {opp.hand.map(c => (
-              <CardView key={c.instanceId} size="opponent-hand" isFaceDown />
-            ))}
+        {/* Center Mystic Sigil Background */}
+        <div
+          className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-25"
+          style={{ boxShadow: `inset 0 0 140px ${currentTheme.ambientGlow}` }}
+        >
+          <div className="w-[440px] h-[440px] rounded-full border border-white/5 flex items-center justify-center">
+            <div className="w-[320px] h-[320px] rounded-full border border-dashed border-white/10" />
           </div>
+        </div>
 
-          {/* Integrated Opponent Bar: Avatar + Yellow Barrier Plates + RUNE/DOM Sockets */}
-          <div className="flex items-center space-x-1.5 sm:space-x-2 bg-black/65 backdrop-blur-md px-2 py-0.5 sm:py-1 rounded-2xl border border-white/10 shadow-lg mt-0.5">
-            {/* Avatar Crest */}
-            <div
-              onClick={handleOpponentDirectAttack}
-              className={`flex items-center space-x-1 px-1.5 py-0.5 rounded-full border transition-all cursor-pointer ${
-                canDirectAttack
-                  ? 'border-red-500 bg-red-950/90 shadow-lg shadow-red-500/60 scale-105 ring-2 ring-red-400 animate-pulse'
-                  : 'border-white/10 bg-slate-900/80'
-              }`}
-              title={canDirectAttack ? '相手を直接攻撃！' : '相手プレイヤー'}
-            >
-              <div className="w-5 h-5 rounded-full bg-gradient-to-br from-red-700 to-slate-900 border border-red-400 flex items-center justify-center shadow">
-                <span className="text-[7.5px] font-black text-red-200">OPP</span>
-              </div>
-            </div>
-
-            {/* 5 Yellow Barrier Plates */}
-            <BarrierPlates
-              count={opp.barrier}
-              max={5}
+        {/* ========================================================================= */}
+        {/* 1. TOP TIER: Opponent Area (Height 80px)                                  */}
+        {/* ========================================================================= */}
+        <div className="h-[80px] w-full px-4 flex items-center justify-between z-30 pointer-events-none shrink-0 relative border-b border-white/5 bg-black/20">
+          {/* Top-Left: Opponent Arcana & Deck/Archive Gauge */}
+          <div className="pointer-events-auto shrink-0">
+            <ArcanaGauge
               isOpponent
-              isTargetable={canDirectAttack}
-              onClick={handleOpponentDirectAttack}
+              current={opp.currentArcana}
+              max={opp.maxArcana}
+              arcanaCards={opp.arcana}
+              deckCount={opp.deck.length}
+              archiveCount={opp.archive.length}
+              onOpenArcana={() =>
+                setZoneModal({
+                  isOpen: true,
+                  title: '相手のアルカナゾーン',
+                  zoneType: 'arcana',
+                  cards: opp.arcana,
+                  isOpponent: true,
+                })
+              }
+              onOpenArchive={() =>
+                setZoneModal({
+                  isOpen: true,
+                  title: '相手のアーカイブ(墓地)',
+                  zoneType: 'archive',
+                  cards: opp.archive,
+                  isOpponent: true,
+                })
+              }
             />
+          </div>
 
-            <div className="h-5 w-px bg-white/15 mx-0.5" />
-
-            {/* Opponent Runes (2 Sockets) */}
-            <div className="flex items-center space-x-1">
-              <span className="text-[7px] font-black text-slate-400 uppercase tracking-tight">RUNE</span>
-              {opp.runes[0] ? (
-                <CardView isFaceDown size="compact" onClick={(e) => handleCardClick(opp.runes[0].instanceId, e)} />
-              ) : (
-                <div className="w-[34px] h-[26px] sm:w-[38px] sm:h-[30px] border border-dashed border-white/15 rounded flex items-center justify-center text-[7px] text-white/20">空</div>
-              )}
-              {opp.runes[1] ? (
-                <CardView isFaceDown size="compact" onClick={(e) => handleCardClick(opp.runes[1].instanceId, e)} />
-              ) : (
-                <div className="w-[34px] h-[26px] sm:w-[38px] sm:h-[30px] border border-dashed border-white/15 rounded flex items-center justify-center text-[7px] text-white/20">空</div>
-              )}
+          {/* Top-Center: Docked Opponent Hand + Status Bar (Avatar + Yellow Barriers + Runes/Domain) */}
+          <div className="flex flex-col items-center pointer-events-auto space-y-1">
+            {/* Opponent Hand (Compact face-down cards) */}
+            <div className="flex items-center justify-center -space-x-2">
+              {opp.hand.map(c => (
+                <CardView key={c.instanceId} size="opponent-hand" isFaceDown />
+              ))}
             </div>
 
-            <div className="h-5 w-px bg-white/15 mx-0.5" />
-
-            {/* Opponent Domain */}
-            <div className="flex items-center space-x-1">
-              <span className="text-[7px] font-black text-slate-400 uppercase tracking-tight">DOM</span>
-              {opp.domain ? (
-                <CardView instance={opp.domain} size="compact" onInspect={() => onInspect(getCard(opp.domain!.cardId))} />
-              ) : (
-                <div className="w-[34px] h-[26px] sm:w-[38px] sm:h-[30px] border border-dashed border-white/15 rounded flex items-center justify-center text-[7px] text-white/20">無</div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Top-Right: Quick Theme & Battle Log Drawer Trigger */}
-        <div className="pointer-events-auto flex items-center space-x-1.5 pt-0.5">
-          <button
-            onClick={() => setShowPlaymatSelector(true)}
-            className="p-1.5 rounded-xl bg-slate-950/80 hover:bg-slate-900 border border-slate-700/80 text-slate-300 hover:text-white shadow transition-all"
-            title="プレイマット変更"
-          >
-            <Palette size={14} />
-          </button>
-          <button
-            onClick={() => setShowLog(!showLog)}
-            className="flex items-center space-x-1 px-2 py-1 rounded-xl bg-slate-950/80 hover:bg-slate-900 border border-slate-700/80 text-slate-300 hover:text-white shadow text-[10px] font-bold transition-all"
-            title="戦闘ログを表示"
-          >
-            <History size={13} className="text-amber-400" />
-            <span className="hidden sm:inline">LOG</span>
-          </button>
-        </div>
-      </div>
-
-      {/* ========================================================================= */}
-      {/* 2. CENTER BATTLE ZONE: Expansive Dual 6-Slot Arena Grid (h-[210px])       */}
-      {/* ========================================================================= */}
-      <div className="relative h-[210px] w-full max-w-5xl mx-auto flex flex-col justify-center items-center px-1 sm:px-2 z-10 pointer-events-auto shrink-0 min-h-0 min-w-0">
-        {/* Floating Targeting Guide Banner */}
-        {selectedCardId && me.hand.some(c => c.instanceId === selectedCardId && getCard(c.cardId).type === 'Spell' && getCard(c.cardId).targetReq) && (
-          <div className="absolute -top-1.5 z-30 bg-indigo-950/95 border border-cyan-400 px-3 py-0.5 rounded-full shadow-xl text-[10px] font-bold text-cyan-200 flex items-center space-x-1.5 animate-pulse">
-            <Zap size={11} className="text-yellow-300" />
-            <span>【{getCard(me.hand.find(c => c.instanceId === selectedCardId)!.cardId).name}】の対象を選択してください</span>
-          </div>
-        )}
-        {selectedCardId && me.field.some(u => u.instanceId === selectedCardId) && (
-          <div className="absolute -top-1.5 z-30 bg-red-950/95 border border-red-400 px-3 py-0.5 rounded-full shadow-xl text-[10px] font-bold text-red-200 flex items-center space-x-1.5 animate-pulse">
-            <Sword size={11} className="text-yellow-300" />
-            <span>攻撃対象（レスト状態の相手ユニット または 相手プレイヤー）を選択</span>
-          </div>
-        )}
-
-        {/* Opponent Field (6 Creature Slots - 1 SLOT = 1 UNIT GUARANTEED, w-[64px] h-[86px]) */}
-        <div className="w-full flex items-center justify-center space-x-2 sm:space-x-3 min-h-0">
-          {Array.from({ length: 6 }).map((_, slotIdx) => {
-            const unit = opp.field[slotIdx];
-            const stats = unit ? calculateUnitStats(state, 'player2', unit) : null;
-            const isTarget = unit ? isTargetValidForSelected('unit', unit) : false;
-            const isAttacking = unit && activeAttackerId === unit.instanceId;
-            const hasRipple = summonRippleSlot?.isOpponent && summonRippleSlot.slotIdx === slotIdx;
-
-            return (
+            {/* Integrated Opponent Bar */}
+            <div className="flex items-center space-x-2 bg-black/70 backdrop-blur-md px-3 py-1 rounded-2xl border border-white/10 shadow-lg">
+              {/* Avatar Crest */}
               <div
-                key={unit ? unit.instanceId : `opp-slot-${slotIdx}`}
-                className={`relative w-[64px] h-[86px] rounded-lg flex items-center justify-center transition-all min-h-0 shrink-0 overflow-hidden ${
-                  unit
-                    ? ''
-                    : 'border-2 border-dashed border-white/15 bg-black/25'
-                } ${
-                  isTarget
-                    ? 'ring-2 ring-red-400 shadow-lg shadow-red-500/70 cursor-pointer animate-pulse scale-[1.02]'
-                    : ''
-                } ${isAttacking ? 'animate-attack-dash z-40' : ''}`}
-                onClick={(e) => unit && handleCardClick(unit.instanceId, e)}
+                onClick={handleOpponentDirectAttack}
+                className={`flex items-center space-x-1 px-1.5 py-0.5 rounded-full border transition-all cursor-pointer ${
+                  canDirectAttack
+                    ? 'border-red-500 bg-red-950/90 shadow-lg shadow-red-500/60 scale-105 ring-2 ring-red-400 animate-pulse'
+                    : 'border-white/10 bg-slate-900/80'
+                }`}
+                title={canDirectAttack ? '相手を直接攻撃！' : '相手プレイヤー'}
               >
-                {/* Summon Wave Ripple Effect */}
-                {hasRipple && (
-                  <div className="absolute inset-0 rounded-lg border-2 border-red-400 animate-summon-ripple pointer-events-none z-30" />
-                )}
+                <div className="w-5 h-5 rounded-full bg-gradient-to-br from-red-700 to-slate-900 border border-red-400 flex items-center justify-center shadow">
+                  <span className="text-[7.5px] font-black text-red-200">OPP</span>
+                </div>
+              </div>
 
-                {unit ? (
-                  <CardView
-                    instance={unit.cards[0]}
-                    size="field"
-                    computedStats={stats!}
-                    isRested={unit.isRested}
-                    hasSummoningSickness={unit.hasSummoningSickness}
-                    evoCount={unit.cards.length}
-                    onInspect={() => onInspect(getCard(unit.cards[0].cardId))}
-                  />
+              {/* 5 Yellow Barrier Plates */}
+              <BarrierPlates
+                count={opp.barrier}
+                max={5}
+                isOpponent
+                isTargetable={canDirectAttack}
+                onClick={handleOpponentDirectAttack}
+              />
+
+              <div className="h-4 w-px bg-white/15 mx-0.5" />
+
+              {/* Opponent Runes (2 Sockets) */}
+              <div className="flex items-center space-x-1">
+                <span className="text-[7px] font-black text-slate-400 uppercase tracking-tight">RUNE</span>
+                {opp.runes[0] ? (
+                  <CardView isFaceDown size="compact" onClick={(e) => handleCardClick(opp.runes[0].instanceId, e)} />
                 ) : (
-                  <span className="text-[9px] sm:text-[10px] font-black text-white/15 select-none">
-                    {slotIdx + 1}
-                  </span>
+                  <div className="w-[34px] h-[26px] border border-dashed border-white/15 rounded flex items-center justify-center text-[7px] text-white/20">空</div>
+                )}
+                {opp.runes[1] ? (
+                  <CardView isFaceDown size="compact" onClick={(e) => handleCardClick(opp.runes[1].instanceId, e)} />
+                ) : (
+                  <div className="w-[34px] h-[26px] border border-dashed border-white/15 rounded flex items-center justify-center text-[7px] text-white/20">空</div>
                 )}
               </div>
-            );
-          })}
-        </div>
 
-        {/* Generous Arena Dividing Crest Line (Breathing room) */}
-        <div className="w-full max-w-2xl flex items-center justify-center my-1 opacity-70">
-          <div className="flex-1 h-px bg-gradient-to-r from-transparent via-amber-400/50 to-transparent" />
-          <div className="mx-3 px-2.5 py-0.5 rounded-full border border-amber-400/50 bg-black/70 flex items-center space-x-1.5 shadow-lg">
-            <Sword size={10} className="text-amber-400" />
-            <span className="text-[7.5px] sm:text-[8.5px] font-black tracking-widest text-amber-300 uppercase">
-              BATTLE ARENA
-            </span>
+              <div className="h-4 w-px bg-white/15 mx-0.5" />
+
+              {/* Opponent Domain */}
+              <div className="flex items-center space-x-1">
+                <span className="text-[7px] font-black text-slate-400 uppercase tracking-tight">DOM</span>
+                {opp.domain ? (
+                  <CardView instance={opp.domain} size="compact" onInspect={() => onInspect(getCard(opp.domain!.cardId))} />
+                ) : (
+                  <div className="w-[34px] h-[26px] border border-dashed border-white/15 rounded flex items-center justify-center text-[7px] text-white/20">無</div>
+                )}
+              </div>
+            </div>
           </div>
-          <div className="flex-1 h-px bg-gradient-to-r from-transparent via-amber-400/50 to-transparent" />
+
+          {/* Top-Right: Quick Theme & Battle Log Drawer Trigger */}
+          <div className="pointer-events-auto flex items-center space-x-1.5">
+            <button
+              onClick={() => setShowPlaymatSelector(true)}
+              className="p-1.5 rounded-xl bg-slate-950/80 hover:bg-slate-900 border border-slate-700/80 text-slate-300 hover:text-white shadow transition-all"
+              title="プレイマット変更"
+            >
+              <Palette size={14} />
+            </button>
+            <button
+              onClick={() => setShowLog(!showLog)}
+              className="flex items-center space-x-1 px-2 py-1 rounded-xl bg-slate-950/80 hover:bg-slate-900 border border-slate-700/80 text-slate-300 hover:text-white shadow text-[10px] font-bold transition-all"
+              title="戦闘ログを表示"
+            >
+              <History size={13} className="text-amber-400" />
+              <span>LOG</span>
+            </button>
+          </div>
         </div>
 
-        {/* Player Field (6 Creature Slots - 1 SLOT = 1 UNIT GUARANTEED, w-[64px] h-[86px]) */}
-        <div className="w-full flex items-center justify-center space-x-2 sm:space-x-3 min-h-0">
-          {Array.from({ length: 6 }).map((_, slotIdx) => {
-            const unit = me.field[slotIdx];
-            const stats = unit ? calculateUnitStats(state, 'player1', unit) : null;
-            const isSelected = unit && unit.instanceId === selectedCardId;
-            const isAttackerReady = unit && isMyTurn && state.phase === 'ACTION' && !unit.isRested && !unit.hasSummoningSickness;
-            const isAttacking = unit && activeAttackerId === unit.instanceId;
-            const hasRipple = !summonRippleSlot?.isOpponent && summonRippleSlot?.slotIdx === slotIdx;
+        {/* ========================================================================= */}
+        {/* 2. CENTER BATTLE ZONE: Dual 6-Slot Arena Grid (Height 240px)              */}
+        {/* ========================================================================= */}
+        <div className="h-[240px] w-full px-4 flex flex-col justify-around items-center z-10 pointer-events-auto shrink-0 relative">
+          {/* Floating Targeting Guide Banner */}
+          {selectedCardId && me.hand.some(c => c.instanceId === selectedCardId && getCard(c.cardId).type === 'Spell' && getCard(c.cardId).targetReq) && (
+            <div className="absolute top-1 z-30 bg-indigo-950/95 border border-cyan-400 px-3 py-0.5 rounded-full shadow-xl text-[10.5px] font-bold text-cyan-200 flex items-center space-x-1.5 animate-pulse">
+              <Zap size={11} className="text-yellow-300" />
+              <span>【{getCard(me.hand.find(c => c.instanceId === selectedCardId)!.cardId).name}】の対象を選択してください</span>
+            </div>
+          )}
+          {selectedCardId && me.field.some(u => u.instanceId === selectedCardId) && (
+            <div className="absolute top-1 z-30 bg-red-950/95 border border-red-400 px-3 py-0.5 rounded-full shadow-xl text-[10.5px] font-bold text-red-200 flex items-center space-x-1.5 animate-pulse">
+              <Sword size={11} className="text-yellow-300" />
+              <span>攻撃対象（レスト状態の相手ユニット または 相手プレイヤー）を選択</span>
+            </div>
+          )}
 
-            return (
-              <div
-                key={unit ? unit.instanceId : `me-slot-${slotIdx}`}
-                onClick={(e) => {
-                  if (unit) {
-                    handleCardClick(unit.instanceId, e);
-                  } else if (isSelectedHandPlayable && selectedHandCard) {
-                    // Click empty slot to summon selected card
-                    e.stopPropagation();
-                    handlePlayHandCard(selectedHandCard.instanceId);
-                  }
-                }}
-                className={`relative w-[64px] h-[86px] rounded-lg flex items-center justify-center transition-all min-h-0 shrink-0 overflow-hidden ${
-                  unit
-                    ? ''
-                    : isSelectedHandPlayable
-                      ? 'border-2 border-dashed border-emerald-400/90 bg-emerald-950/40 cursor-pointer shadow-lg shadow-emerald-500/40 animate-pulse hover:bg-emerald-900/50'
+          {/* Opponent Field (6 Creature Slots, w-[72px] h-[96px]) */}
+          <div className="w-full flex items-center justify-center space-x-3">
+            {Array.from({ length: 6 }).map((_, slotIdx) => {
+              const unit = opp.field[slotIdx];
+              const stats = unit ? calculateUnitStats(state, 'player2', unit) : null;
+              const isTarget = unit ? isTargetValidForSelected('unit', unit) : false;
+              const isAttacking = unit && activeAttackerId === unit.instanceId;
+              const hasRipple = summonRippleSlot?.isOpponent && summonRippleSlot.slotIdx === slotIdx;
+
+              return (
+                <div
+                  key={unit ? unit.instanceId : `opp-slot-${slotIdx}`}
+                  className={`relative w-[72px] h-[96px] rounded-lg flex items-center justify-center transition-all shrink-0 overflow-hidden ${
+                    unit
+                      ? ''
                       : 'border-2 border-dashed border-white/15 bg-black/25'
-                } ${isAttacking ? 'animate-attack-dash z-40' : ''}`}
-              >
-                {/* Summon Wave Ripple Effect */}
-                {hasRipple && (
-                  <div className="absolute inset-0 rounded-lg border-2 border-cyan-300 animate-summon-ripple pointer-events-none z-30" />
-                )}
+                  } ${
+                    isTarget
+                      ? 'ring-2 ring-red-400 shadow-lg shadow-red-500/70 cursor-pointer animate-pulse scale-[1.02]'
+                      : ''
+                  } ${isAttacking ? 'animate-attack-dash z-40' : ''}`}
+                  onClick={(e) => unit && handleCardClick(unit.instanceId, e)}
+                >
+                  {/* Summon Wave Ripple Effect */}
+                  {hasRipple && (
+                    <div className="absolute inset-0 rounded-lg border-2 border-red-400 animate-summon-ripple pointer-events-none z-30" />
+                  )}
 
-                {unit ? (
-                  <CardView
-                    instance={unit.cards[0]}
-                    size="field"
-                    computedStats={stats!}
-                    isRested={unit.isRested}
-                    hasSummoningSickness={unit.hasSummoningSickness}
-                    evoCount={unit.cards.length}
-                    selected={isSelected}
-                    playable={isAttackerReady}
-                    onInspect={() => onInspect(getCard(unit.cards[0].cardId))}
-                  />
-                ) : (
-                  <span className={`text-[9px] sm:text-[10px] font-black select-none ${
-                    isSelectedHandPlayable ? 'text-emerald-300 font-bold animate-pulse' : 'text-white/15'
-                  }`}>
-                    {isSelectedHandPlayable ? '召喚' : slotIdx + 1}
-                  </span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
+                  {unit ? (
+                    <CardView
+                      instance={unit.cards[0]}
+                      size="field"
+                      computedStats={stats!}
+                      isRested={unit.isRested}
+                      hasSummoningSickness={unit.hasSummoningSickness}
+                      evoCount={unit.cards.length}
+                      onInspect={() => onInspect(getCard(unit.cards[0].cardId))}
+                    />
+                  ) : (
+                    <span className="text-[10px] font-black text-white/15 select-none">{slotIdx + 1}</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
 
-      {/* ========================================================================= */}
-      {/* 3. BOTTOM TIER: Player HUD, Hand Tray, Arcana Gauge & Controls (h-[130px]) */}
-      {/* ========================================================================= */}
-      <div className="h-[130px] w-full flex flex-col justify-between shrink-0 px-2 min-h-0 z-30 pb-0.5">
-        {/* Top Row of Bottom Tier: Centered Player Barrier & Rune/Domain Bar (Cleanly BELOW field, ABOVE hand) */}
-        <div className="w-full flex items-center justify-center pointer-events-auto">
-          <div className="flex items-center space-x-1.5 sm:space-x-2 bg-black/75 backdrop-blur-md px-2.5 py-0.5 rounded-2xl border border-white/10 shadow-lg">
-            {/* 5 Cyan Barrier Plates */}
-            <BarrierPlates count={me.barrier} max={5} isOpponent={false} />
-
-            <div className="h-4 w-px bg-white/15 mx-0.5" />
-
-            {/* Player Runes (2 Sockets) */}
-            <div className="flex items-center space-x-1">
-              <span className="text-[7px] font-black text-slate-400 uppercase tracking-tight">RUNE</span>
-              {me.runes[0] ? (
-                <CardView isFaceDown size="compact" onClick={(e) => handleCardClick(me.runes[0].instanceId, e)} />
-              ) : (
-                <div className="w-[32px] h-[24px] sm:w-[36px] sm:h-[28px] border border-dashed border-white/15 rounded flex items-center justify-center text-[7px] text-white/20">空</div>
-              )}
-              {me.runes[1] ? (
-                <CardView isFaceDown size="compact" onClick={(e) => handleCardClick(me.runes[1].instanceId, e)} />
-              ) : (
-                <div className="w-[32px] h-[24px] sm:w-[36px] sm:h-[28px] border border-dashed border-white/15 rounded flex items-center justify-center text-[7px] text-white/20">空</div>
-              )}
+          {/* Arena Dividing Line */}
+          <div className="w-full max-w-2xl flex items-center justify-center h-[20px] opacity-75">
+            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-amber-400/50 to-transparent" />
+            <div className="mx-3 px-3 py-0.5 rounded-full border border-amber-400/50 bg-black/70 flex items-center space-x-1.5 shadow-lg">
+              <Sword size={11} className="text-amber-400" />
+              <span className="text-[8.5px] font-black tracking-widest text-amber-300 uppercase">
+                BATTLE ARENA
+              </span>
             </div>
+            <div className="flex-1 h-px bg-gradient-to-l from-transparent via-amber-400/50 to-transparent" />
+          </div>
 
-            <div className="h-4 w-px bg-white/15 mx-0.5" />
+          {/* Player Field (6 Creature Slots, w-[72px] h-[96px]) */}
+          <div className="w-full flex items-center justify-center space-x-3">
+            {Array.from({ length: 6 }).map((_, slotIdx) => {
+              const unit = me.field[slotIdx];
+              const stats = unit ? calculateUnitStats(state, 'player1', unit) : null;
+              const isSelected = unit && selectedCardId === unit.instanceId;
+              const isAttackerReady = unit && isMyTurn && state.phase === 'ACTION' && !unit.isRested && !unit.hasSummoningSickness;
+              const isAttacking = unit && activeAttackerId === unit.instanceId;
+              const hasRipple = !summonRippleSlot?.isOpponent && summonRippleSlot?.slotIdx === slotIdx;
 
-            {/* Player Domain */}
-            <div className="flex items-center space-x-1">
-              <span className="text-[7px] font-black text-slate-400 uppercase tracking-tight">DOM</span>
-              {me.domain ? (
-                <CardView instance={me.domain} size="compact" onInspect={() => onInspect(getCard(me.domain!.cardId))} />
-              ) : (
-                <div className="w-[32px] h-[24px] sm:w-[36px] sm:h-[28px] border border-dashed border-white/15 rounded flex items-center justify-center text-[7px] text-white/20">無</div>
-              )}
-            </div>
+              return (
+                <div
+                  key={unit ? unit.instanceId : `me-slot-${slotIdx}`}
+                  onClick={(e) => {
+                    if (unit) {
+                      handleCardClick(unit.instanceId, e);
+                    } else if (isSelectedHandPlayable && selectedHandCard) {
+                      handlePlayHandCard(selectedHandCard.instanceId);
+                    }
+                  }}
+                  className={`relative w-[72px] h-[96px] rounded-lg flex items-center justify-center transition-all shrink-0 overflow-hidden ${
+                    unit
+                      ? ''
+                      : isSelectedHandPlayable
+                        ? 'border-2 border-dashed border-emerald-400/90 bg-emerald-950/40 cursor-pointer shadow-lg shadow-emerald-500/40 animate-pulse hover:bg-emerald-900/50'
+                        : 'border-2 border-dashed border-white/15 bg-black/25'
+                  } ${isAttacking ? 'animate-attack-dash z-40' : ''}`}
+                >
+                  {/* Summon Wave Ripple Effect */}
+                  {hasRipple && (
+                    <div className="absolute inset-0 rounded-lg border-2 border-cyan-300 animate-summon-ripple pointer-events-none z-30" />
+                  )}
+
+                  {unit ? (
+                    <CardView
+                      instance={unit.cards[0]}
+                      size="field"
+                      computedStats={stats!}
+                      isRested={unit.isRested}
+                      hasSummoningSickness={unit.hasSummoningSickness}
+                      evoCount={unit.cards.length}
+                      selected={isSelected}
+                      playable={isAttackerReady}
+                      onInspect={() => onInspect(getCard(unit.cards[0].cardId))}
+                    />
+                  ) : (
+                    <span className={`text-[10px] font-black select-none ${
+                      isSelectedHandPlayable ? 'text-emerald-300 font-bold animate-pulse' : 'text-white/15'
+                    }`}>
+                      {isSelectedHandPlayable ? '召喚' : slotIdx + 1}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        {/* Bottom Row of Bottom Tier: Arcana Gauge (Left), Hand Tray (Center), Action Controls (Right) */}
-        <div className="w-full flex items-end justify-between relative min-h-0">
+        {/* ========================================================================= */}
+        {/* 3. BOTTOM TIER: Player Area (Height 180px)                                */}
+        {/* ========================================================================= */}
+        <div className="h-[180px] w-full px-4 flex items-center justify-between z-30 pointer-events-none shrink-0 relative border-t border-white/5 bg-black/25">
           {/* Bottom-Left: Circular Arcana Gauge + Deck & Archive */}
           <div className="pointer-events-auto shrink-0">
             <ArcanaGauge
@@ -786,21 +766,59 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
             />
           </div>
 
-          {/* Bottom-Center: Interactive Player Hand Tray */}
-          <div className="flex-1 max-w-xl mx-2 flex justify-center pointer-events-auto min-h-0">
-            <HandTray
-              hand={me.hand}
-              state={state}
-              dispatch={dispatch}
-              selectedCard={selectedCardId}
-              onSelect={(id) => setSelectedCardId(id || null)}
-              onInspect={onInspect}
-              onPlayCard={handlePlayHandCard}
-              onArcanaPlace={handlePlaceHandArcana}
-            />
+          {/* Bottom-Center: Player Barrier Bar (Upper) & Hand Tray (Lower) */}
+          <div className="flex-1 max-w-2xl mx-3 flex flex-col items-center justify-between h-full py-2 pointer-events-auto">
+            {/* Player Barrier Plates + RUNE 2 Sockets + DOM 1 Socket */}
+            <div className="flex items-center space-x-2 bg-black/75 backdrop-blur-md px-3 py-1 rounded-2xl border border-white/10 shadow-lg shrink-0">
+              {/* 5 Cyan Barrier Plates */}
+              <BarrierPlates count={me.barrier} max={5} isOpponent={false} />
+
+              <div className="h-4 w-px bg-white/15 mx-0.5" />
+
+              {/* Player Runes (2 Sockets) */}
+              <div className="flex items-center space-x-1">
+                <span className="text-[7px] font-black text-slate-400 uppercase tracking-tight">RUNE</span>
+                {me.runes[0] ? (
+                  <CardView isFaceDown size="compact" onClick={(e) => handleCardClick(me.runes[0].instanceId, e)} />
+                ) : (
+                  <div className="w-[34px] h-[26px] border border-dashed border-white/15 rounded flex items-center justify-center text-[7px] text-white/20">空</div>
+                )}
+                {me.runes[1] ? (
+                  <CardView isFaceDown size="compact" onClick={(e) => handleCardClick(me.runes[1].instanceId, e)} />
+                ) : (
+                  <div className="w-[34px] h-[26px] border border-dashed border-white/15 rounded flex items-center justify-center text-[7px] text-white/20">空</div>
+                )}
+              </div>
+
+              <div className="h-4 w-px bg-white/15 mx-0.5" />
+
+              {/* Player Domain */}
+              <div className="flex items-center space-x-1">
+                <span className="text-[7px] font-black text-slate-400 uppercase tracking-tight">DOM</span>
+                {me.domain ? (
+                  <CardView instance={me.domain} size="compact" onInspect={() => onInspect(getCard(me.domain!.cardId))} />
+                ) : (
+                  <div className="w-[34px] h-[26px] border border-dashed border-white/15 rounded flex items-center justify-center text-[7px] text-white/20">無</div>
+                )}
+              </div>
+            </div>
+
+            {/* Player Hand Tray */}
+            <div className="w-full flex justify-center items-end min-h-0">
+              <HandTray
+                hand={me.hand}
+                state={state}
+                dispatch={dispatch}
+                selectedCard={selectedCardId}
+                onSelect={(id) => setSelectedCardId(id || null)}
+                onInspect={onInspect}
+                onPlayCard={handlePlayHandCard}
+                onArcanaPlace={handlePlaceHandArcana}
+              />
+            </div>
           </div>
 
-          {/* Bottom-Right: 3D Turn End Button & Arcana Charge */}
+          {/* Bottom-Right: 3D Turn End Button & Controls */}
           <div className="pointer-events-auto shrink-0">
             <ActionControls
               phase={state.phase}
@@ -821,7 +839,6 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
             />
           </div>
         </div>
-      </div>
 
       {/* ========================================================================= */}
       {/* 4. COMBAT LOG SLIDE-IN DRAWER (RIGHT)                                     */}
@@ -963,6 +980,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
           </button>
         </div>
       )}
+      </div>
 
       {/* ========================================================================= */}
       {/* 8. MODALS: ZONE VIEWER & PLAYMAT SELECTOR                                 */}

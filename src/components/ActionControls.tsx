@@ -83,7 +83,7 @@ export const ActionControls: React.FC<Props> = ({
           type="button"
           disabled={!canAct}
           onClick={onNextPhase}
-          className={`relative group h-11 sm:h-14 md:h-16 px-3.5 sm:px-5 md:px-6 rounded-xl sm:rounded-2xl font-black tracking-wider transition-all select-none shadow-2xl active:scale-95 flex items-center justify-center border-2 min-h-[44px] ${
+          className={`relative group w-28 h-14 rounded-2xl font-black tracking-wider transition-all select-none shadow-2xl active:scale-95 flex items-center justify-center border-2 shrink-0 ${
             canAct
               ? phase === 'ARCANA_PLACEMENT'
                 ? 'bg-gradient-to-b from-blue-500 via-indigo-600 to-blue-800 border-blue-300/80 text-white shadow-blue-500/40 hover:brightness-110'
