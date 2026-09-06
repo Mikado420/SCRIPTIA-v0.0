@@ -1,0 +1,263 @@
+/* SCRIPTIA Battle & TCG Visual FX Suite */
+
+/* Screen Shake (3px - 5px micro-vibration on clash/break) */
+@keyframes screenShakeImpact {
+  0% { transform: translate(0, 0); }
+  20% { transform: translate(-4px, 3px) rotate(-0.5deg); }
+  40% { transform: translate(5px, -4px) rotate(0.5deg); }
+  60% { transform: translate(-3px, 2px); }
+  80% { transform: translate(2px, -1px); }
+  100% { transform: translate(0, 0); }
+}
+
+.animate-screen-shake {
+  animation: screenShakeImpact 0.38s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+/* Magic Circle Summon Ripple */
+@keyframes magicCircleSummon {
+  0% {
+    transform: scale(0.4) rotate(0deg);
+    opacity: 0;
+    box-shadow: 0 0 0px rgba(56, 189, 248, 0);
+  }
+  25% {
+    opacity: 1;
+    transform: scale(1) rotate(45deg);
+    box-shadow: 0 0 25px rgba(56, 189, 248, 0.9), inset 0 0 15px rgba(250, 204, 21, 0.8);
+  }
+  70% {
+    opacity: 0.8;
+    transform: scale(1.6) rotate(120deg);
+    box-shadow: 0 0 45px rgba(56, 189, 248, 0.6);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.2) rotate(180deg);
+  }
+}
+
+.animate-magic-circle {
+  animation: magicCircleSummon 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Card Slam Landing */
+@keyframes cardLandingSlam {
+  0% {
+    transform: scale(1.4) translateY(-30px);
+    opacity: 0;
+    filter: brightness(2.5);
+  }
+  60% {
+    transform: scale(0.96) translateY(2px);
+    opacity: 1;
+    filter: brightness(1.4);
+  }
+  80% {
+    transform: scale(1.03) translateY(-1px);
+  }
+  100% {
+    transform: scale(1) translateY(0);
+    filter: brightness(1);
+  }
+}
+
+.animate-card-landing {
+  animation: cardLandingSlam 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+/* Evolution Surge & Convergence */
+@keyframes evolveConvergence {
+  0% {
+    transform: scale(0.8);
+    filter: brightness(3) drop-shadow(0 0 30px #f59e0b);
+    opacity: 0.2;
+  }
+  40% {
+    transform: scale(1.25);
+    filter: brightness(4) drop-shadow(0 0 60px #eab308) drop-shadow(0 0 20px #ffffff);
+    opacity: 1;
+  }
+  70% {
+    transform: scale(0.98);
+    filter: brightness(1.5);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+.animate-evolve-surge {
+  animation: evolveConvergence 0.65s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
+}
+
+/* Attack Dash & Clash */
+@keyframes attackDashRush {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  20% {
+    transform: translateY(14px) scale(0.92);
+  }
+  50% {
+    transform: translateY(-65px) scale(1.26);
+    z-index: 50;
+    filter: brightness(1.5) drop-shadow(0 0 16px #facc15);
+  }
+  75% {
+    transform: translateY(-45px) scale(1.15);
+    z-index: 50;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-attack-dash {
+  animation: attackDashRush 0.52s cubic-bezier(0.2, 0.85, 0.25, 1) forwards;
+}
+
+/* Clash Spark Flash */
+@keyframes clashSpark {
+  0% { transform: scale(0.3) rotate(0deg); opacity: 1; filter: brightness(3); }
+  50% { transform: scale(1.4) rotate(45deg); opacity: 0.9; }
+  100% { transform: scale(2.2) rotate(90deg); opacity: 0; }
+}
+
+.animate-clash-spark {
+  animation: clashSpark 0.4s ease-out forwards;
+}
+
+/* Card Destroy (Cracking & Glass Shatter to Archive) */
+@keyframes cardDestroyCracking {
+  0% {
+    transform: scale(1);
+    filter: brightness(1) contrast(1);
+    opacity: 1;
+  }
+  30% {
+    transform: scale(1.08) rotate(2deg);
+    filter: brightness(2.5) contrast(2) drop-shadow(0 0 15px #ef4444);
+  }
+  60% {
+    transform: scale(0.85) rotate(-3deg) translateY(10px);
+    opacity: 0.7;
+    filter: brightness(1.8) grayscale(0.8);
+  }
+  100% {
+    transform: scale(0.1) translateY(40px) rotate(15deg);
+    opacity: 0;
+    filter: blur(4px);
+  }
+}
+
+.animate-card-destroy {
+  animation: cardDestroyCracking 0.58s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+/* Shield Break Blast & Shards */
+@keyframes shieldBreakPulse {
+  0% { transform: scale(1); filter: brightness(1); }
+  25% { transform: scale(1.45); filter: brightness(4) drop-shadow(0 0 35px #38bdf8); }
+  55% { transform: scale(1.2) rotate(6deg); opacity: 0.95; }
+  100% { transform: scale(0) rotate(20deg); opacity: 0; }
+}
+
+.animate-shield-break {
+  animation: shieldBreakPulse 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes shatterShardDrift {
+  0% { transform: scale(1) translate(0, 0); opacity: 1; }
+  45% { opacity: 0.9; filter: brightness(2.2); }
+  100% {
+    transform: scale(0.1) translate(var(--tw-shatter-x, 30px), var(--tw-shatter-y, 30px)) rotate(var(--tw-shatter-r, 60deg));
+    opacity: 0;
+  }
+}
+
+.animate-shatter-shard {
+  animation: shatterShardDrift 0.72s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+/* Hand Trigger Intense Yellow Pulse */
+@keyframes handTriggerIntensePulse {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(250, 204, 21, 0.6), inset 0 0 6px rgba(250, 204, 21, 0.4);
+    border-color: #facc15;
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 26px rgba(250, 204, 21, 1), 0 0 45px rgba(234, 179, 8, 0.8), inset 0 0 14px rgba(254, 240, 138, 0.9);
+    border-color: #fef08a;
+    transform: scale(1.07);
+  }
+}
+
+.animate-hand-trigger-pulse {
+  animation: handTriggerIntensePulse 0.95s ease-in-out infinite;
+}
+
+/* Rune Trigger Darken & Cut-in */
+@keyframes runeDarkenOverlay {
+  0% { opacity: 0; }
+  15% { opacity: 0.88; }
+  85% { opacity: 0.88; }
+  100% { opacity: 0; }
+}
+
+.animate-rune-darken {
+  animation: runeDarkenOverlay 1.9s ease-in-out forwards;
+}
+
+@keyframes runeCutinBanner {
+  0% { transform: scale(0.6) translateY(40px); opacity: 0; }
+  15% { transform: scale(1.1) translateY(-5px); opacity: 1; }
+  25% { transform: scale(1) translateY(0); opacity: 1; }
+  80% { transform: scale(1) translateY(0); opacity: 1; }
+  100% { transform: scale(0.9) translateY(-30px); opacity: 0; }
+}
+
+.animate-rune-cutin {
+  animation: runeCutinBanner 1.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* YOUR TURN Stylish Neon Banner Across Screen */
+@keyframes yourTurnBannerSlide {
+  0% {
+    transform: translateX(-110%) skewX(-14deg);
+    opacity: 0;
+  }
+  20% {
+    transform: translateX(-4%) skewX(-8deg);
+    opacity: 1;
+  }
+  30% {
+    transform: translateX(0%) skewX(0deg);
+    opacity: 1;
+  }
+  75% {
+    transform: translateX(2%) skewX(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(115%) skewX(12deg);
+    opacity: 0;
+  }
+}
+
+.animate-your-turn-banner {
+  animation: yourTurnBannerSlide 1.35s cubic-bezier(0.2, 0.9, 0.25, 1) forwards;
+}
+
+/* Mana Orb Charge Pulse */
+@keyframes manaOrbChargeGlow {
+  0% { transform: scale(1); box-shadow: 0 0 10px rgba(56, 189, 248, 0.5); }
+  40% { transform: scale(1.18); box-shadow: 0 0 35px rgba(245, 158, 11, 1), 0 0 60px rgba(56, 189, 248, 0.8); }
+  100% { transform: scale(1); box-shadow: 0 0 10px rgba(56, 189, 248, 0.5); }
+}
+
+.animate-mana-charge-pulse {
+  animation: manaOrbChargeGlow 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

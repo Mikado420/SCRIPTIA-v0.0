@@ -1,6 +1,7 @@
 import React from 'react';
 import { Phase } from '../types';
 import { ChevronRight, Loader2 } from 'lucide-react';
+import { soundManager } from '../utils/soundManager';
 
 interface Props {
   phase: Phase;
@@ -22,13 +23,19 @@ export const ActionControls: React.FC<Props> = ({
 }) => {
   const canAct = isMyTurn && !hasPrompt;
 
+  const handleClick = () => {
+    if (!canAct) return;
+    soundManager.playCardTouch();
+    onNextPhase();
+  };
+
   return (
     <div className="flex flex-col items-center space-y-1.5 pointer-events-auto select-none shrink-0">
       {/* 3D Cyber "TURN END" / Phase Advance Button (Duel Masters Plays Iconic Shape) */}
       <button
         type="button"
         disabled={!canAct}
-        onClick={onNextPhase}
+        onClick={handleClick}
         className={`relative group w-22 sm:w-24 h-11 sm:h-12 rounded-2xl font-black tracking-wider transition-all select-none shadow-2xl active:scale-95 flex flex-col items-center justify-center border-2 shrink-0 ${
           canAct
             ? phase === 'ARCANA_PLACEMENT'

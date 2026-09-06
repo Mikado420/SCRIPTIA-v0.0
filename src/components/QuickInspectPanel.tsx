@@ -37,7 +37,7 @@ export const QuickInspectPanel: React.FC<QuickInspectPanelProps> = ({ card, onCl
   return (
     <div
       id="quick-card-inspect-panel"
-      className="absolute top-2 left-2 z-50 w-[280px] select-none rounded-xl border-2 border-cyan-400 bg-slate-950/95 p-2.5 text-white shadow-[0_0_24px_rgba(6,182,212,0.5)] backdrop-blur-md animate-in fade-in zoom-in-95 duration-150"
+      className="absolute top-2 left-2 z-50 w-[280px] max-h-[220px] overflow-y-auto select-none rounded-xl border-2 border-cyan-400 bg-slate-950/95 p-2.5 text-white shadow-[0_0_24px_rgba(6,182,212,0.6)] backdrop-blur-md animate-in fade-in zoom-in-95 duration-150"
       onClick={(e) => e.stopPropagation()}
     >
       {/* Metallic Cyber Header */}

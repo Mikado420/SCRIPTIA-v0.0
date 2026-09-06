@@ -73,7 +73,7 @@ export const CardView: React.FC<CardViewProps> = ({
     'opponent-hand': 'w-[30px] h-[40px] rounded-sm',
     'field': 'w-[68px] h-[90px] rounded-lg',
     'hand': 'w-[60px] h-[84px] rounded-lg',
-    'compact': 'w-[42px] h-[32px] rounded-md',
+    'compact': 'w-[52px] h-[70px] rounded-md',
     'default': 'w-24 h-34 sm:w-28 sm:h-40 rounded-md',
   }[size];
 
@@ -267,22 +267,43 @@ export const CardView: React.FC<CardViewProps> = ({
     );
   }
 
-  // 3. COMPACT CARD DISPLAY (Domain / Rune slot)
+  // 3. COMPACT CARD DISPLAY (Domain / Rune slot: 52px x 70px)
   if (size === 'compact') {
     return (
       <div
         onClick={onClick}
         onContextMenu={onContextMenu}
-        className={`relative ${sizeClasses} bg-gradient-to-b ${sysColor} border flex flex-col justify-between select-none overflow-hidden shrink-0 shadow ${className}`}
+        className={`relative ${sizeClasses} bg-gradient-to-b ${sysColor} border-2 flex flex-col justify-between select-none overflow-hidden shrink-0 shadow-md ${className}`}
       >
-        <div className={`absolute -top-1 -left-1 w-3.5 h-3.5 rounded-full flex items-center justify-center font-black text-[8px] border border-black shadow ${badgeColor}`}>
+        {/* Top-Left Cost Badge */}
+        <div className={`absolute -top-1 -left-1 w-4 h-4 rounded-full flex items-center justify-center font-black text-[9px] border border-black shadow z-10 ${badgeColor}`}>
           {card.cost}
         </div>
-        <div className="pt-2 px-0.5 bg-black/60 truncate whitespace-nowrap overflow-hidden text-[7.5px] leading-tight font-bold tracking-tight text-center text-white">
+
+        {/* Card Name Bar */}
+        <div className="pt-2.5 px-0.5 pb-0.5 bg-black/75 truncate whitespace-nowrap overflow-hidden text-[8px] leading-tight font-black tracking-tight text-center text-white shadow-inner">
           {card.name}
         </div>
-        <div className="text-center text-[6.5px] text-amber-300/80 bg-black/70 py-0.5 uppercase font-bold">
-          {typeMap[card.type]}
+
+        {/* Center Sigil / Type Icon Area */}
+        <div className="flex-1 flex flex-col items-center justify-center py-0.5 px-1 bg-black/20">
+          <div className="w-5 h-5 rounded-full border border-white/20 bg-black/40 flex items-center justify-center shadow-inner">
+            <span className="text-[8px] font-black text-white/80">{card.system[0]}</span>
+          </div>
+          {card.lineage ? (
+            <span className="text-[6px] text-amber-300 font-bold truncate max-w-full mt-0.5">
+              {lineageMap[card.lineage] || card.lineage}
+            </span>
+          ) : (
+            <span className="text-[6px] text-slate-300 font-bold truncate max-w-full mt-0.5">
+              {typeMap[card.type] || card.type}
+            </span>
+          )}
+        </div>
+
+        {/* Bottom Bar: Type / Slot designation */}
+        <div className="text-center py-0.5 bg-black/85 text-[6.5px] text-amber-300 border-t border-white/10 uppercase font-black tracking-wider">
+          {typeMap[card.type] || card.type}
         </div>
       </div>
     );

@@ -13,7 +13,8 @@ import { getCard } from '../data/cards';
 import { calculateUnitStats, canPlayCard } from '../engine/engineUtils';
 import { canUnitGuard, isValidAttackTarget } from '../engine/combatEngine';
 import { getValidSpellTargets } from '../engine/spellSystem';
-import { History, X, Shield, Sparkles, Sword, Zap, Palette, User, Menu, BookOpen } from 'lucide-react';
+import { History, X, Shield, Sparkles, Sword, Zap, Palette, User, Menu, BookOpen, Volume2, VolumeX } from 'lucide-react';
+import { soundManager } from '../utils/soundManager';
 
 interface Props {
   state: GameState;
@@ -26,6 +27,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
   const [arcanaMode, setArcanaMode] = useState(false);
   const [showLog, setShowLog] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [isMuted, setIsMuted] = useState(() => soundManager.getMuted());
 
   // Canvas Ref for accurate coordinate scaling
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -35,6 +37,14 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
   const [activeAttackerId, setActiveAttackerId] = useState<string | null>(null);
   const [summonRippleSlot, setSummonRippleSlot] = useState<{ isOpponent: boolean; slotIdx: number } | null>(null);
   const [cutinCard, setCutinCard] = useState<{ card: CardTemplate; title: string } | null>(null);
+  const [showYourTurnBanner, setShowYourTurnBanner] = useState(false);
+  const [clashSparkPos, setClashSparkPos] = useState<{ x: number; y: number } | null>(null);
+
+  // 0.7s Long-Press Card Detail Window State (280px x 220px)
+  const [longPressInspected, setLongPressInspected] = useState<{
+    card: CardTemplate;
+    stats?: { atk: number; def: number; brk: number };
+  } | null>(null);
 
   // Shield Break & Shatter Animations
   const [shatteringOppShieldIdx, setShatteringOppShieldIdx] = useState<number | null>(null);
@@ -60,6 +70,38 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
       snapY: number;
     } | null;
   } | null>(null);
+  const prevLockedTargetId = useRef<string | null>(null);
+
+  // 0.7s Long-Press Tracking Refs for Field Units & Slots
+  const playerUnitPointerDownPos = useRef<{
+    unit: UnitState;
+    slotIdx: number;
+    clientX: number;
+    clientY: number;
+    canvasStartX: number;
+    canvasStartY: number;
+    time: number;
+  } | null>(null);
+  const playerUnitLongPressTimer = useRef<NodeJS.Timeout | number | null>(null);
+  const hasPlayerUnitLongPressed = useRef(false);
+
+  const oppUnitPointerDownPos = useRef<{
+    unit: UnitState;
+    slotIdx: number;
+    clientX: number;
+    clientY: number;
+  } | null>(null);
+  const oppUnitLongPressTimer = useRef<NodeJS.Timeout | number | null>(null);
+  const hasOppUnitLongPressed = useRef(false);
+
+  const slotPointerDownPos = useRef<{
+    clientX: number;
+    clientY: number;
+    card: CardTemplate;
+    instanceId: string;
+  } | null>(null);
+  const slotLongPressTimer = useRef<NodeJS.Timeout | number | null>(null);
+  const hasSlotLongPressed = useRef(false);
 
   // Quick feedback toast
   const [feedbackToast, setFeedbackToast] = useState<{ text: string; type: 'info' | 'warn' | 'success' } | null>(null);
@@ -147,11 +189,44 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
     prevLogLength.current = state.log.length;
   }, [state.log.length]);
 
-  // Track shield breaks to trigger glass shatter animations
+  // Turn Start Banner & SE trigger
+  const prevPlayer = useRef(state.currentPlayer);
+  const prevTurnCount = useRef(state.turnCount);
+  useEffect(() => {
+    if (state.currentPlayer === 'player1' && (prevPlayer.current !== 'player1' || prevTurnCount.current !== state.turnCount)) {
+      setShowYourTurnBanner(true);
+      soundManager.playTurnStart();
+      const t = setTimeout(() => setShowYourTurnBanner(false), 1400);
+      return () => clearTimeout(t);
+    }
+    prevPlayer.current = state.currentPlayer;
+    prevTurnCount.current = state.turnCount;
+  }, [state.currentPlayer, state.turnCount]);
+
+  // Rune Trigger Sound Effect
+  useEffect(() => {
+    if (state.prompt?.type === 'RUNE_TRIGGER' || state.prompt?.type === 'TRIGGER') {
+      soundManager.playRuneTrigger();
+    }
+  }, [state.prompt?.type]);
+
+  // Track field unit destructions to trigger card destroy SE
+  const prevP1FieldLength = useRef(me.field.length);
+  const prevP2FieldLength = useRef(opp.field.length);
+  useEffect(() => {
+    if (me.field.length < prevP1FieldLength.current || opp.field.length < prevP2FieldLength.current) {
+      soundManager.playCardDestroy();
+    }
+    prevP1FieldLength.current = me.field.length;
+    prevP2FieldLength.current = opp.field.length;
+  }, [me.field.length, opp.field.length]);
+
+  // Track shield breaks to trigger crystal glass shatter sound and animations
   const prevOppBarrier = useRef(opp.barrier);
   useEffect(() => {
     if (opp.barrier < prevOppBarrier.current) {
       const brokenIdx = opp.barrier;
+      soundManager.playShieldBreak();
       setShatteringOppShieldIdx(brokenIdx);
       setIsScreenShaking(true);
       setTimeout(() => setIsScreenShaking(false), 420);
@@ -164,6 +239,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
   useEffect(() => {
     if (me.barrier < prevPlayerBarrier.current) {
       const brokenIdx = me.barrier;
+      soundManager.playShieldBreak();
       setShatteringPlayerShieldIdx(brokenIdx);
       setIsScreenShaking(true);
       setTimeout(() => setIsScreenShaking(false), 420);
@@ -181,6 +257,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
 
   const handleBoardClick = () => {
     setSelectedCardId(null);
+    setLongPressInspected(null);
     setArcanaMode(false);
   };
 
@@ -228,6 +305,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
     if (arcanaDist < 65) {
       // Dropped onto Arcana Gauge
       if (!state.flags.hasPlacedArcanaThisTurn && isMyTurn) {
+        soundManager.playManaCharge();
         dispatch({ type: 'PLACE_ARCANA', instanceId: card.instanceId });
         showToast('⚡ アルカナ充填！ (+1 ARCANA)', 'success');
         setSelectedCardId(null);
@@ -239,6 +317,13 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
       const tpl = getCard(card.cardId);
       const playable = isMyTurn && state.phase === 'ACTION' && canPlayCard(tpl, me.currentArcana, me.arcana, me.field.length);
       if (playable) {
+        if (tpl.type === 'Evolution') {
+          soundManager.playEvolve();
+        } else if (tpl.type === 'Unit') {
+          soundManager.playSummonUnit();
+        } else if (tpl.type === 'Spell') {
+          soundManager.playCardSwipe();
+        }
         handlePlayHandCard(card.instanceId);
       } else {
         showToast('アルカナまたは条件が足りません', 'warn');
@@ -318,9 +403,14 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
         : undefined))
     : undefined;
 
-  // Attack animation execution
-  const performAttackAnimation = (attackerId: string, targetId?: string) => {
+  // Attack animation execution with sound & spark flash
+  const performAttackAnimation = (attackerId: string, targetId?: string, targetPos?: { x: number; y: number }) => {
     setActiveAttackerId(attackerId);
+    if (targetPos) {
+      setClashSparkPos(targetPos);
+      setTimeout(() => setClashSparkPos(null), 420);
+    }
+    soundManager.playAttackClash();
     setTimeout(() => {
       setIsScreenShaking(true);
       setTimeout(() => setIsScreenShaking(false), 380);
@@ -329,10 +419,19 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
     }, 200);
   };
 
-  // Unit Attack Pointer Drag Handlers
-  const handleUnitAttackPointerDown = (unit: UnitState, slotIdx: number, e: React.PointerEvent) => {
-    if (!isMyTurn || state.phase !== 'ACTION' || unit.isRested || unit.hasSummoningSickness) return;
+  // 0.7s Long-Press / Drag logic for Friendly Units
+  const clearPlayerUnitLongPressTimer = () => {
+    if (playerUnitLongPressTimer.current !== null) {
+      clearTimeout(playerUnitLongPressTimer.current as NodeJS.Timeout);
+      playerUnitLongPressTimer.current = null;
+    }
+  };
+
+  const handlePlayerUnitPointerDown = (unit: UnitState, slotIdx: number, e: React.PointerEvent) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
     e.stopPropagation();
+    clearPlayerUnitLongPressTimer();
+    hasPlayerUnitLongPressed.current = false;
 
     // Calculate slot center in canvas coordinates
     let startX = 232 + slotIdx * 76;
@@ -345,16 +444,211 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
       startY = (slotRect.top + slotRect.height / 2 - canvasRect.top) / scale;
     }
 
-    const currentCoords = getCanvasCoords(e.clientX, e.clientY);
-    setAttackDrag({
-      attackerId: unit.instanceId,
-      startX,
-      startY,
-      currentX: currentCoords.x,
-      currentY: currentCoords.y,
-      lockedTarget: null,
-    });
-    setSelectedCardId(unit.instanceId);
+    playerUnitPointerDownPos.current = {
+      unit,
+      slotIdx,
+      clientX: e.clientX,
+      clientY: e.clientY,
+      canvasStartX: startX,
+      canvasStartY: startY,
+      time: Date.now(),
+    };
+
+    // Start 700ms long press timer
+    playerUnitLongPressTimer.current = setTimeout(() => {
+      if (!attackDrag) {
+        hasPlayerUnitLongPressed.current = true;
+        soundManager.playDetailOpen();
+        const card = getCard(unit.cards[0].cardId);
+        const stats = calculateUnitStats(state, 'player1', unit);
+        setLongPressInspected({ card, stats });
+      }
+      clearPlayerUnitLongPressTimer();
+    }, 700);
+
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handlePlayerUnitPointerMove = (unit: UnitState, slotIdx: number, e: React.PointerEvent) => {
+    if (!playerUnitPointerDownPos.current || playerUnitPointerDownPos.current.unit.instanceId !== unit.instanceId) return;
+
+    const dist = Math.hypot(
+      e.clientX - playerUnitPointerDownPos.current.clientX,
+      e.clientY - playerUnitPointerDownPos.current.clientY
+    );
+
+    // Cancel 700ms long-press when moved >= 10px
+    if (dist >= 10) {
+      clearPlayerUnitLongPressTimer();
+
+      // Check if unit is ready to attack
+      const isAttackerReady = isMyTurn && state.phase === 'ACTION' && !unit.isRested && !unit.hasSummoningSickness;
+      if (isAttackerReady && !attackDrag) {
+        const currentCoords = getCanvasCoords(e.clientX, e.clientY);
+        setAttackDrag({
+          attackerId: unit.instanceId,
+          startX: playerUnitPointerDownPos.current.canvasStartX,
+          startY: playerUnitPointerDownPos.current.canvasStartY,
+          currentX: currentCoords.x,
+          currentY: currentCoords.y,
+          lockedTarget: null,
+        });
+        setSelectedCardId(unit.instanceId);
+      }
+    }
+  };
+
+  const handlePlayerUnitPointerUp = (unit: UnitState, slotIdx: number, e: React.PointerEvent) => {
+    clearPlayerUnitLongPressTimer();
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+
+    const hadLongPressed = hasPlayerUnitLongPressed.current;
+    const wasDragging = attackDrag !== null;
+
+    playerUnitPointerDownPos.current = null;
+    hasPlayerUnitLongPressed.current = false;
+
+    if (!wasDragging && !hadLongPressed) {
+      // Short tap (<700ms, <10px)
+      soundManager.playCardTouch();
+      handleCardClick(unit.instanceId, e as any);
+    }
+  };
+
+  // 0.7s Long-Press logic for Opponent Units
+  const clearOppUnitLongPressTimer = () => {
+    if (oppUnitLongPressTimer.current !== null) {
+      clearTimeout(oppUnitLongPressTimer.current as NodeJS.Timeout);
+      oppUnitLongPressTimer.current = null;
+    }
+  };
+
+  const handleOppUnitPointerDown = (unit: UnitState, slotIdx: number, e: React.PointerEvent) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    e.stopPropagation();
+    clearOppUnitLongPressTimer();
+    hasOppUnitLongPressed.current = false;
+
+    oppUnitPointerDownPos.current = {
+      unit,
+      slotIdx,
+      clientX: e.clientX,
+      clientY: e.clientY,
+    };
+
+    oppUnitLongPressTimer.current = setTimeout(() => {
+      hasOppUnitLongPressed.current = true;
+      soundManager.playDetailOpen();
+      const card = getCard(unit.cards[0].cardId);
+      const stats = calculateUnitStats(state, 'player2', unit);
+      setLongPressInspected({ card, stats });
+      clearOppUnitLongPressTimer();
+    }, 700);
+
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleOppUnitPointerMove = (unit: UnitState, e: React.PointerEvent) => {
+    if (!oppUnitPointerDownPos.current || oppUnitPointerDownPos.current.unit.instanceId !== unit.instanceId) return;
+    const dist = Math.hypot(
+      e.clientX - oppUnitPointerDownPos.current.clientX,
+      e.clientY - oppUnitPointerDownPos.current.clientY
+    );
+    if (dist >= 10) {
+      clearOppUnitLongPressTimer();
+    }
+  };
+
+  const handleOppUnitPointerUp = (unit: UnitState, e: React.PointerEvent) => {
+    clearOppUnitLongPressTimer();
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+    const hadLongPressed = hasOppUnitLongPressed.current;
+    oppUnitPointerDownPos.current = null;
+    hasOppUnitLongPressed.current = false;
+
+    if (!hadLongPressed) {
+      soundManager.playCardTouch();
+      handleCardClick(unit.instanceId, e as any);
+    }
+  };
+
+  // 0.7s Long-Press logic for Domain and Runes
+  const clearSlotLongPressTimer = () => {
+    if (slotLongPressTimer.current !== null) {
+      clearTimeout(slotLongPressTimer.current as NodeJS.Timeout);
+      slotLongPressTimer.current = null;
+    }
+  };
+
+  const handleSlotCardPointerDown = (card: CardTemplate, instanceId: string, e: React.PointerEvent) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    e.stopPropagation();
+    clearSlotLongPressTimer();
+    hasSlotLongPressed.current = false;
+
+    slotPointerDownPos.current = {
+      clientX: e.clientX,
+      clientY: e.clientY,
+      card,
+      instanceId,
+    };
+
+    slotLongPressTimer.current = setTimeout(() => {
+      hasSlotLongPressed.current = true;
+      soundManager.playDetailOpen();
+      setLongPressInspected({ card });
+      clearSlotLongPressTimer();
+    }, 700);
+
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleSlotCardPointerMove = (e: React.PointerEvent) => {
+    if (!slotPointerDownPos.current) return;
+    const dist = Math.hypot(
+      e.clientX - slotPointerDownPos.current.clientX,
+      e.clientY - slotPointerDownPos.current.clientY
+    );
+    if (dist >= 10) {
+      clearSlotLongPressTimer();
+    }
+  };
+
+  const handleSlotCardPointerUp = (instanceId: string, e: React.PointerEvent) => {
+    clearSlotLongPressTimer();
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+    const hadLongPressed = hasSlotLongPressed.current;
+    slotPointerDownPos.current = null;
+    hasSlotLongPressed.current = false;
+
+    if (!hadLongPressed) {
+      soundManager.playCardTouch();
+      handleCardClick(instanceId, e as any);
+    }
   };
 
   const handleGlobalPointerMove = (e: React.PointerEvent) => {
@@ -416,6 +710,12 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
       }
     }
 
+    const currentLockedId = locked ? (locked.type === 'unit' ? locked.id : 'player') : null;
+    if (currentLockedId && currentLockedId !== prevLockedTargetId.current) {
+      soundManager.playAttackLock();
+    }
+    prevLockedTargetId.current = currentLockedId;
+
     setAttackDrag(prev => prev ? {
       ...prev,
       currentX: locked ? locked.snapX : coords.x,
@@ -434,7 +734,8 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
     if (attackDrag.lockedTarget) {
       performAttackAnimation(
         attackDrag.attackerId,
-        attackDrag.lockedTarget.type === 'unit' ? attackDrag.lockedTarget.id : undefined
+        attackDrag.lockedTarget.type === 'unit' ? attackDrag.lockedTarget.id : undefined,
+        { x: attackDrag.lockedTarget.snapX, y: attackDrag.lockedTarget.snapY }
       );
       showToast(
         attackDrag.lockedTarget.type === 'player'
@@ -444,13 +745,14 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
       );
       setSelectedCardId(null);
     }
+    prevLockedTargetId.current = null;
     setAttackDrag(null);
   };
 
   const handleOpponentDirectAttack = (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (canDirectAttack && selectedCardId) {
-      performAttackAnimation(selectedCardId);
+      performAttackAnimation(selectedCardId, undefined, { x: 422, y: 55 });
       setSelectedCardId(null);
     }
   };
@@ -673,7 +975,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
         {/* 1. TOP FLOATING CONTROLS: Left Menu, Opponent Hand, Avatar & Top-Right    */}
         {/* ========================================================================= */}
 
-        {/* Top-Left: Hamburger Menu Button & Turn Counter (NO SCRIPTIA Logo) */}
+        {/* Top-Left: Hamburger Menu Button, Sound Mute Button & Turn Counter */}
         <div className="absolute top-2 left-2.5 z-40 flex items-center space-x-1.5 pointer-events-auto select-none">
           <button
             type="button"
@@ -685,6 +987,18 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
             title="メニューを開く"
           >
             <Menu size={15} />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              const nextMuted = soundManager.toggleMute();
+              setIsMuted(nextMuted);
+            }}
+            className="w-7 h-7 rounded-lg bg-black/70 hover:bg-black/90 border border-white/20 hover:border-cyan-400 flex items-center justify-center text-slate-200 hover:text-white transition-all shadow-md active:scale-95 cursor-pointer backdrop-blur-sm"
+            title={isMuted ? '効果音: OFF (タップでON)' : '効果音: ON (タップでOFF)'}
+          >
+            {isMuted ? <VolumeX size={14} className="text-red-400" /> : <Volume2 size={14} className="text-cyan-400" />}
           </button>
           <span className="px-1.5 py-0.5 rounded bg-black/60 border border-white/10 text-[9px] font-mono font-bold text-cyan-400 shadow">
             T{state.turnCount}
@@ -804,82 +1118,126 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
         </div>
 
         {/* ========================================================================= */}
-        {/* 2. LEFT CYBER SLOTS: Domain & Runes (Shifted Inwards / Right-Offset)       */}
+        {/* 2. LEFT CYBER SLOTS: Domain & Runes (Candidate B: 52px x 70px)            */}
         {/* ========================================================================= */}
 
-        {/* Top-Left: Opponent Domain & Runes (Shifted Inwards to left-6) */}
-        <div className="absolute top-12 left-6 z-20 flex flex-col space-y-1.5 pointer-events-auto select-none">
+        {/* Top-Left: Opponent Domain & Runes (Candidate B: 52px x 70px) */}
+        <div className="absolute top-11 left-2.5 z-20 flex items-start space-x-1.5 pointer-events-auto select-none">
           {/* Opponent Domain */}
           <div className="flex flex-col items-center">
-            <span className="text-[6px] font-black text-amber-400/80 uppercase tracking-tighter mb-0.5">DOMAIN</span>
+            <span className="text-[7px] font-black text-amber-400 uppercase tracking-wider mb-0.5">DOMAIN</span>
             {opp.domain ? (
-              <div className="w-[38px] h-[28px] rounded border border-amber-400/60 overflow-hidden shadow">
-                <CardView instance={opp.domain} size="compact" onInspect={() => onInspect(getCard(opp.domain!.cardId))} />
+              <div
+                className="w-[52px] h-[70px] rounded-md border border-amber-400/60 overflow-hidden shadow-lg cursor-pointer transition-transform hover:scale-105 active:scale-95"
+                onPointerDown={(e) => handleSlotCardPointerDown(getCard(opp.domain!.cardId), opp.domain!.instanceId, e)}
+                onPointerMove={handleSlotCardPointerMove}
+                onPointerUp={(e) => handleSlotCardPointerUp(opp.domain!.instanceId, e)}
+                onPointerCancel={clearSlotLongPressTimer}
+              >
+                <CardView instance={opp.domain} size="compact" onInspect={() => {}} />
               </div>
             ) : (
-              <div className="w-[38px] h-[28px] rounded-lg border border-dashed border-amber-400/20 bg-amber-950/10 flex items-center justify-center text-[7px] text-amber-400/30">
-                無
+              <div className="w-[52px] h-[70px] rounded-md border border-dashed border-amber-400/25 bg-amber-950/20 flex flex-col items-center justify-center text-[8px] text-amber-400/40 font-bold">
+                <span>空</span>
+                <span className="text-[6px] tracking-tighter opacity-60">DOMAIN</span>
               </div>
             )}
           </div>
 
-          {/* Opponent Runes (2 Sockets) */}
-          <div className="flex flex-col items-center space-y-0.5">
-            <span className="text-[6px] font-black text-slate-400/70 uppercase tracking-tighter">RUNES</span>
+          {/* Opponent Runes (2 Sockets, Candidate B: 52px x 70px) */}
+          <div className="flex flex-col items-center">
+            <span className="text-[7px] font-black text-slate-400 uppercase tracking-wider mb-0.5">RUNES</span>
             <div className="flex space-x-1">
               {opp.runes[0] ? (
-                <div className="w-[22px] h-[26px]">
-                  <CardView isFaceDown size="compact" onClick={(e) => handleCardClick(opp.runes[0].instanceId, e)} />
+                <div
+                  className="w-[52px] h-[70px] rounded-md border border-slate-600/60 overflow-hidden shadow cursor-pointer transition-transform hover:scale-105 active:scale-95"
+                  onClick={(e) => handleCardClick(opp.runes[0].instanceId, e)}
+                >
+                  <CardView isFaceDown size="compact" onInspect={() => {}} />
                 </div>
               ) : (
-                <div className="w-[22px] h-[26px] rounded border border-dashed border-white/20 bg-black/20 flex items-center justify-center text-[6px] text-white/30">1</div>
+                <div className="w-[52px] h-[70px] rounded-md border border-dashed border-white/20 bg-black/30 flex flex-col items-center justify-center text-[8px] text-white/30 font-bold">
+                  <span>1</span>
+                  <span className="text-[6px] tracking-tighter opacity-50">RUNE</span>
+                </div>
               )}
               {opp.runes[1] ? (
-                <div className="w-[22px] h-[26px]">
-                  <CardView isFaceDown size="compact" onClick={(e) => handleCardClick(opp.runes[1].instanceId, e)} />
+                <div
+                  className="w-[52px] h-[70px] rounded-md border border-slate-600/60 overflow-hidden shadow cursor-pointer transition-transform hover:scale-105 active:scale-95"
+                  onClick={(e) => handleCardClick(opp.runes[1].instanceId, e)}
+                >
+                  <CardView isFaceDown size="compact" onInspect={() => {}} />
                 </div>
               ) : (
-                <div className="w-[22px] h-[26px] rounded border border-dashed border-white/20 bg-black/20 flex items-center justify-center text-[6px] text-white/30">2</div>
+                <div className="w-[52px] h-[70px] rounded-md border border-dashed border-white/20 bg-black/30 flex flex-col items-center justify-center text-[8px] text-white/30 font-bold">
+                  <span>2</span>
+                  <span className="text-[6px] tracking-tighter opacity-50">RUNE</span>
+                </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* Bottom-Left: Player Runes & Domain (Shifted Inwards to left-6) */}
-        <div className="absolute bottom-22 left-6 z-20 flex flex-col space-y-1.5 pointer-events-auto select-none">
-          {/* Player Runes (2 Sockets) */}
-          <div className="flex flex-col items-center space-y-0.5">
-            <span className="text-[6px] font-black text-cyan-400/80 uppercase tracking-tighter">YOU RUNES</span>
-            <div className="flex space-x-1">
-              {me.runes[0] ? (
-                <div className="w-[22px] h-[26px]">
-                  <CardView isFaceDown size="compact" onClick={(e) => handleCardClick(me.runes[0].instanceId, e)} />
-                </div>
-              ) : (
-                <div className="w-[22px] h-[26px] rounded border border-dashed border-cyan-500/30 bg-cyan-950/20 flex items-center justify-center text-[6px] text-cyan-300/30">1</div>
-              )}
-              {me.runes[1] ? (
-                <div className="w-[22px] h-[26px]">
-                  <CardView isFaceDown size="compact" onClick={(e) => handleCardClick(me.runes[1].instanceId, e)} />
-                </div>
-              ) : (
-                <div className="w-[22px] h-[26px] rounded border border-dashed border-cyan-500/30 bg-cyan-950/20 flex items-center justify-center text-[6px] text-cyan-300/30">2</div>
-              )}
-            </div>
-          </div>
-
+        {/* Bottom-Left: Player Domain & Runes (Candidate B: 52px x 70px) */}
+        <div className="absolute bottom-20 left-2.5 z-20 flex items-start space-x-1.5 pointer-events-auto select-none">
           {/* Player Domain */}
           <div className="flex flex-col items-center">
-            <span className="text-[6px] font-black text-cyan-400 uppercase tracking-tighter mb-0.5">YOU DOMAIN</span>
+            <span className="text-[7px] font-black text-cyan-400 uppercase tracking-wider mb-0.5">DOMAIN</span>
             {me.domain ? (
-              <div className="w-[38px] h-[28px] rounded border border-cyan-400/60 overflow-hidden shadow">
-                <CardView instance={me.domain} size="compact" onInspect={() => onInspect(getCard(me.domain!.cardId))} />
+              <div
+                className="w-[52px] h-[70px] rounded-md border border-cyan-400/70 overflow-hidden shadow-lg shadow-cyan-500/20 cursor-pointer transition-transform hover:scale-105 active:scale-95"
+                onPointerDown={(e) => handleSlotCardPointerDown(getCard(me.domain!.cardId), me.domain!.instanceId, e)}
+                onPointerMove={handleSlotCardPointerMove}
+                onPointerUp={(e) => handleSlotCardPointerUp(me.domain!.instanceId, e)}
+                onPointerCancel={clearSlotLongPressTimer}
+              >
+                <CardView instance={me.domain} size="compact" onInspect={() => {}} />
               </div>
             ) : (
-              <div className="w-[38px] h-[28px] rounded-lg border border-dashed border-cyan-500/20 bg-cyan-950/10 flex items-center justify-center text-[7px] text-cyan-300/30">
-                無
+              <div className="w-[52px] h-[70px] rounded-md border border-dashed border-cyan-500/25 bg-cyan-950/20 flex flex-col items-center justify-center text-[8px] text-cyan-300/40 font-bold">
+                <span>空</span>
+                <span className="text-[6px] tracking-tighter opacity-60">DOMAIN</span>
               </div>
             )}
+          </div>
+
+          {/* Player Runes (2 Sockets, Candidate B: 52px x 70px) */}
+          <div className="flex flex-col items-center">
+            <span className="text-[7px] font-black text-cyan-400 uppercase tracking-wider mb-0.5">RUNES</span>
+            <div className="flex space-x-1">
+              {me.runes[0] ? (
+                <div
+                  className="w-[52px] h-[70px] rounded-md border border-cyan-500/50 overflow-hidden shadow-lg shadow-cyan-500/20 cursor-pointer transition-transform hover:scale-105 active:scale-95"
+                  onPointerDown={(e) => handleSlotCardPointerDown(getCard(me.runes[0].cardId), me.runes[0].instanceId, e)}
+                  onPointerMove={handleSlotCardPointerMove}
+                  onPointerUp={(e) => handleSlotCardPointerUp(me.runes[0].instanceId, e)}
+                  onPointerCancel={clearSlotLongPressTimer}
+                >
+                  <CardView isFaceDown size="compact" onInspect={() => {}} />
+                </div>
+              ) : (
+                <div className="w-[52px] h-[70px] rounded-md border border-dashed border-cyan-500/30 bg-cyan-950/20 flex flex-col items-center justify-center text-[8px] text-cyan-300/40 font-bold">
+                  <span>1</span>
+                  <span className="text-[6px] tracking-tighter opacity-60">RUNE</span>
+                </div>
+              )}
+              {me.runes[1] ? (
+                <div
+                  className="w-[52px] h-[70px] rounded-md border border-cyan-500/50 overflow-hidden shadow-lg shadow-cyan-500/20 cursor-pointer transition-transform hover:scale-105 active:scale-95"
+                  onPointerDown={(e) => handleSlotCardPointerDown(getCard(me.runes[1].cardId), me.runes[1].instanceId, e)}
+                  onPointerMove={handleSlotCardPointerMove}
+                  onPointerUp={(e) => handleSlotCardPointerUp(me.runes[1].instanceId, e)}
+                  onPointerCancel={clearSlotLongPressTimer}
+                >
+                  <CardView isFaceDown size="compact" onInspect={() => {}} />
+                </div>
+              ) : (
+                <div className="w-[52px] h-[70px] rounded-md border border-dashed border-cyan-500/30 bg-cyan-950/20 flex flex-col items-center justify-center text-[8px] text-cyan-300/40 font-bold">
+                  <span>2</span>
+                  <span className="text-[6px] tracking-tighter opacity-60">RUNE</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -960,18 +1318,21 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
                 <div
                   key={unit ? unit.instanceId : `opp-slot-${slotIdx}`}
                   id={`opp-slot-${slotIdx}`}
-                  className={`relative w-[68px] h-[90px] rounded-lg flex items-center justify-center shrink-0 transition-all ${
+                  onPointerDown={(e) => unit && handleOppUnitPointerDown(unit, slotIdx, e)}
+                  onPointerMove={(e) => unit && handleOppUnitPointerMove(unit, e)}
+                  onPointerUp={(e) => unit && handleOppUnitPointerUp(unit, e)}
+                  onPointerCancel={clearOppUnitLongPressTimer}
+                  className={`relative w-[68px] h-[90px] rounded-lg flex items-center justify-center shrink-0 transition-all select-none ${
                     unit
-                      ? 'overflow-visible'
+                      ? 'overflow-visible cursor-pointer'
                       : 'border border-cyan-500/15 bg-cyan-950/10 shadow-inner'
                   } ${
                     isLockedTarget
-                      ? 'ring-4 ring-yellow-400 shadow-[0_0_25px_rgba(250,204,21,1)] scale-105 cursor-pointer z-40'
+                      ? 'ring-4 ring-yellow-400 shadow-[0_0_25px_rgba(250,204,21,1)] scale-105 z-40'
                       : isTarget
-                        ? 'ring-2 ring-yellow-400 shadow-lg shadow-yellow-400/60 cursor-pointer animate-pulse z-30'
+                        ? 'ring-2 ring-yellow-400 shadow-lg shadow-yellow-400/60 animate-pulse z-30'
                         : ''
                   } ${isAttacking ? 'animate-attack-dash z-40' : ''}`}
-                  onClick={(e) => unit && handleCardClick(unit.instanceId, e)}
                 >
                   {hasRipple && (
                     <div className="absolute inset-0 rounded-lg border-2 border-red-400 animate-summon-ripple pointer-events-none z-30" />
@@ -985,7 +1346,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
                       isRested={unit.isRested}
                       hasSummoningSickness={unit.hasSummoningSickness}
                       evoCount={unit.cards.length}
-                      onInspect={() => onInspect(getCard(unit.cards[0].cardId))}
+                      onInspect={() => {}}
                     />
                   ) : (
                     <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/20" />
@@ -1024,19 +1385,25 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
                   id={`me-slot-${slotIdx}`}
                   onPointerDown={(e) => {
                     if (unit) {
-                      handleUnitAttackPointerDown(unit, slotIdx, e);
+                      handlePlayerUnitPointerDown(unit, slotIdx, e);
                     }
                   }}
-                  onClick={(e) => {
+                  onPointerMove={(e) => {
                     if (unit) {
-                      handleCardClick(unit.instanceId, e);
+                      handlePlayerUnitPointerMove(unit, slotIdx, e);
+                    }
+                  }}
+                  onPointerUp={(e) => {
+                    if (unit) {
+                      handlePlayerUnitPointerUp(unit, slotIdx, e);
                     } else if (isSelectedHandPlayable && selectedHandCard) {
                       handlePlayHandCard(selectedHandCard.instanceId);
                     }
                   }}
-                  className={`relative w-[68px] h-[90px] rounded-lg flex items-center justify-center shrink-0 transition-all ${
+                  onPointerCancel={clearPlayerUnitLongPressTimer}
+                  className={`relative w-[68px] h-[90px] rounded-lg flex items-center justify-center shrink-0 transition-all select-none ${
                     unit
-                      ? 'overflow-visible'
+                      ? 'overflow-visible cursor-pointer'
                       : isSelectedHandPlayable
                         ? 'border-2 border-emerald-400 bg-emerald-950/40 cursor-pointer shadow-lg shadow-emerald-500/40 animate-pulse'
                         : 'border border-cyan-500/15 bg-cyan-950/10 shadow-inner'
@@ -1060,7 +1427,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
                       evoCount={unit.cards.length}
                       selected={isSelected}
                       playable={isAttackerReady}
-                      onInspect={() => onInspect(getCard(unit.cards[0].cardId))}
+                      onInspect={() => {}}
                     />
                   ) : (
                     <div className="flex flex-col items-center justify-center pointer-events-none">
@@ -1189,13 +1556,34 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
         {/* ========================================================================= */}
         {/* TOP-LEFT DUEL MASTERS GIANT CARD DETAIL POPUP (IMG_9589)                  */}
         {/* ========================================================================= */}
-        {inspectedCardData && (
-          <QuickInspectPanel
-            card={inspectedCardData}
-            computedStats={inspectedUnitStats}
-            onClose={() => setSelectedCardId(null)}
-          />
-        )}
+        {(() => {
+          const active = longPressInspected
+            ? longPressInspected
+            : (inspectedCardData
+              ? { card: inspectedCardData, stats: inspectedUnitStats }
+              : null);
+          if (!active) return null;
+          return (
+            <>
+              <div
+                id="inspect-modal-backdrop"
+                className="absolute inset-0 z-45 bg-black/40 backdrop-blur-[0.5px] pointer-events-auto"
+                onClick={() => {
+                  setLongPressInspected(null);
+                  setSelectedCardId(null);
+                }}
+              />
+              <QuickInspectPanel
+                card={active.card}
+                computedStats={active.stats}
+                onClose={() => {
+                  setLongPressInspected(null);
+                  setSelectedCardId(null);
+                }}
+              />
+            </>
+          );
+        })()}
 
         {/* ========================================================================= */}
         {/* 5. RIGHT CONTROLS: 3D Turn End Button (Middle)                            */}
@@ -1303,6 +1691,48 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
               ⚡ RUNE TRIGGER! 最優先割り込み ⚡
             </div>
             <p className="text-[10px] text-amber-200 font-bold">結界より秘術が解き放たれました！</p>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* BATTLE CLASH SPARK FLASH OVERLAY                                          */}
+        {/* ========================================================================= */}
+        {clashSparkPos && (
+          <div
+            className="absolute pointer-events-none z-50 animate-clash-spark flex items-center justify-center -translate-x-1/2 -translate-y-1/2"
+            style={{ left: `${clashSparkPos.x}px`, top: `${clashSparkPos.y}px` }}
+          >
+            {/* Radial Impact Flash */}
+            <div className="w-28 h-28 rounded-full bg-gradient-to-r from-amber-300 via-yellow-200 to-white opacity-95 blur-xs shadow-[0_0_50px_rgba(251,191,36,1)]" />
+            {/* Cross Laser Slash */}
+            <div className="absolute w-44 h-1 bg-white shadow-[0_0_20px_rgba(255,255,255,1)] rotate-45" />
+            <div className="absolute w-44 h-1 bg-white shadow-[0_0_20px_rgba(255,255,255,1)] -rotate-45" />
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* TURN START BANNER ("YOUR TURN" / "ENEMY TURN")                            */}
+        {/* ========================================================================= */}
+        {showYourTurnBanner && (
+          <div className="absolute inset-0 pointer-events-none z-50 flex items-center justify-center animate-turn-banner">
+            <div className={`px-12 py-3.5 rounded-2xl border-2 flex items-center space-x-3 backdrop-blur-md shadow-[0_0_60px_rgba(0,0,0,0.9)] ${
+              isMyTurn
+                ? 'bg-gradient-to-r from-cyan-950/95 via-blue-900/95 to-cyan-950/95 border-cyan-300 shadow-[0_0_50px_rgba(34,211,238,0.8)]'
+                : 'bg-gradient-to-r from-red-950/95 via-amber-950/95 to-red-950/95 border-red-400 shadow-[0_0_50px_rgba(239,68,68,0.8)]'
+            }`}>
+              <Sparkles size={24} className={isMyTurn ? 'text-cyan-300 animate-spin' : 'text-red-400 animate-pulse'} />
+              <div className="flex flex-col items-center">
+                <span className="text-[11px] font-black tracking-widest text-slate-300 uppercase">
+                  TURN {state.turnCount}
+                </span>
+                <span className={`text-2xl font-black tracking-wider uppercase drop-shadow-[0_0_20px_currentColor] ${
+                  isMyTurn ? 'text-cyan-200' : 'text-red-300'
+                }`}>
+                  {isMyTurn ? 'YOUR TURN' : 'OPPONENT TURN'}
+                </span>
+              </div>
+              <Sparkles size={24} className={isMyTurn ? 'text-cyan-300 animate-spin' : 'text-red-400 animate-pulse'} />
+            </div>
           </div>
         )}
 

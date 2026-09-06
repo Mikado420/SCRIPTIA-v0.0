@@ -4,6 +4,7 @@ import { CardInstance, GameState, GameAction } from '../types';
 import { getCard } from '../data/cards';
 import { canPlayCard } from '../engine/engineUtils';
 import { Zap, ChevronUp, X } from 'lucide-react';
+import { soundManager } from '../utils/soundManager';
 
 interface Props {
   hand: CardInstance[];
@@ -38,9 +39,18 @@ export const HandTray: React.FC<Props> = ({
   const me = state.player1;
   const isMyTurn = state.currentPlayer === 'player1';
 
-  // Pointer drag tracking refs to differentiate tap vs drag
+  // Pointer drag and 700ms long-press tracking refs
   const pointerDownPos = useRef<{ x: number; y: number; id: string; time: number } | null>(null);
   const isDraggingRef = useRef<boolean>(false);
+  const longPressTimerRef = useRef<NodeJS.Timeout | number | null>(null);
+  const hasLongPressedRef = useRef<boolean>(false);
+
+  const clearLongPressTimer = () => {
+    if (longPressTimerRef.current !== null) {
+      clearTimeout(longPressTimerRef.current as NodeJS.Timeout);
+      longPressTimerRef.current = null;
+    }
+  };
 
   // Dynamic overlap for right-aligned hand fan (Duel Masters Plays style)
   const getOverlapMargin = () => {
@@ -52,7 +62,10 @@ export const HandTray: React.FC<Props> = ({
   };
 
   const handlePointerDown = (c: CardInstance, e: React.PointerEvent) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
     e.stopPropagation();
+    clearLongPressTimer();
+
     pointerDownPos.current = {
       x: e.clientX,
       y: e.clientY,
@@ -60,7 +73,23 @@ export const HandTray: React.FC<Props> = ({
       time: Date.now(),
     };
     isDraggingRef.current = false;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    hasLongPressedRef.current = false;
+
+    // Start 700ms long-press timer for card inspection
+    longPressTimerRef.current = setTimeout(() => {
+      if (!isDraggingRef.current) {
+        hasLongPressedRef.current = true;
+        soundManager.playDetailOpen();
+        onInspect(getCard(c.cardId));
+      }
+      clearLongPressTimer();
+    }, 700);
+
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
   };
 
   const handlePointerMove = (c: CardInstance, e: React.PointerEvent) => {
@@ -70,20 +99,28 @@ export const HandTray: React.FC<Props> = ({
       e.clientY - pointerDownPos.current.y
     );
 
-    if (!isDraggingRef.current && dist > 7) {
-      isDraggingRef.current = true;
-      if (onCardDragStart) {
-        onCardDragStart(c, e.clientX, e.clientY);
-      }
-    }
+    // Cancel 700ms long-press if movement exceeds 10px
+    if (dist >= 10) {
+      clearLongPressTimer();
 
-    if (isDraggingRef.current && onCardDragMove) {
-      onCardDragMove(e.clientX, e.clientY);
+      if (!isDraggingRef.current) {
+        isDraggingRef.current = true;
+        soundManager.playCardSwipe();
+        if (onCardDragStart) {
+          onCardDragStart(c, e.clientX, e.clientY);
+        }
+      }
+
+      if (isDraggingRef.current && onCardDragMove) {
+        onCardDragMove(e.clientX, e.clientY);
+      }
     }
   };
 
   const handlePointerUp = (c: CardInstance, e: React.PointerEvent) => {
     if (!pointerDownPos.current || pointerDownPos.current.id !== c.instanceId) return;
+    clearLongPressTimer();
+
     try {
       (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
     } catch {
@@ -91,23 +128,26 @@ export const HandTray: React.FC<Props> = ({
     }
 
     const wasDragging = isDraggingRef.current;
+    const hadLongPressed = hasLongPressedRef.current;
+
     pointerDownPos.current = null;
     isDraggingRef.current = false;
+    hasLongPressedRef.current = false;
 
     if (wasDragging) {
       if (onCardDragEnd) {
         onCardDragEnd(c, e.clientX, e.clientY);
       }
-    } else {
-      // Tap action: toggle selection & inspect
-      const cardData = getCard(c.cardId);
+    } else if (!hadLongPressed) {
+      // Tap action (<700ms, <10px): toggle selection
+      soundManager.playCardTouch();
       const nextSel = selectedCard === c.instanceId ? '' : c.instanceId;
       onSelect(nextSel);
-      if (nextSel) onInspect(cardData);
     }
   };
 
   const handlePointerCancel = (c: CardInstance, e: React.PointerEvent) => {
+    clearLongPressTimer();
     try {
       (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
     } catch {
@@ -118,6 +158,7 @@ export const HandTray: React.FC<Props> = ({
     }
     pointerDownPos.current = null;
     isDraggingRef.current = false;
+    hasLongPressedRef.current = false;
   };
 
   return (
@@ -141,6 +182,10 @@ export const HandTray: React.FC<Props> = ({
             isMyTurn &&
             !state.flags.hasPlacedArcanaThisTurn;
 
+          // Hand trigger detection (e.g. BR-03 即応兵 ゼルガン)
+          const isTriggerCard = cardData.effectText?.includes('結界が破壊された時') || cardData.id === 'BR-03';
+          const isTriggerActive = isTriggerCard && (state.prompt !== null);
+
           // Slight rotation or curve for fan effect if multiple cards
           const rotDeg = Math.max(-8, Math.min(8, (i - (hand.length - 1) / 2) * 2.5));
 
@@ -152,7 +197,9 @@ export const HandTray: React.FC<Props> = ({
               }}
               className={`relative shrink-0 select-none group transition-all duration-200 touch-none ${
                 i > 0 ? getOverlapMargin() : ''
-              } ${isBeingDragged ? 'opacity-20 pointer-events-none' : ''}`}
+              } ${isBeingDragged ? 'opacity-20 pointer-events-none' : ''} ${
+                isTriggerActive ? 'animate-hand-trigger-pulse rounded-lg z-50 ring-2 ring-yellow-400' : ''
+              }`}
               onPointerDown={(e) => handlePointerDown(c, e)}
               onPointerMove={(e) => handlePointerMove(c, e)}
               onPointerUp={(e) => handlePointerUp(c, e)}
