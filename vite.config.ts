@@ -5,7 +5,10 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
-    base: './',
+    base: '/SCRIPTIA-v0.0/',
+    define: {
+      'process.env': {}
+    },
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
