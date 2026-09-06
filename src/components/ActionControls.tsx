@@ -10,11 +10,8 @@ interface Props {
   hasPrompt: boolean;
   selectedCardId: string | null;
   isHandSelected: boolean;
-  deckCount: number;
-  archiveCount: number;
   onNextPhase: () => void;
   onArcanaCharge: () => void;
-  onOpenArchive: () => void;
 }
 
 export const ActionControls: React.FC<Props> = ({
@@ -23,11 +20,8 @@ export const ActionControls: React.FC<Props> = ({
   hasPlacedArcanaThisTurn,
   hasPrompt,
   isHandSelected,
-  deckCount,
-  archiveCount,
   onNextPhase,
   onArcanaCharge,
-  onOpenArchive,
 }) => {
   const canAct = isMyTurn && !hasPrompt;
 
@@ -100,41 +94,6 @@ export const ActionControls: React.FC<Props> = ({
           <span>{isHandSelected ? 'チャージ決定' : 'アルカナ充填'}</span>
         </button>
       )}
-
-      {/* Cyber Deck Stack & Archive Buttons */}
-      <div className="flex items-center space-x-1 pt-0.5">
-        {/* Layered Deck Stack (Duel Masters 3D card deck) */}
-        <div
-          className="relative group cursor-default"
-          title={`自軍山札残り: ${deckCount}枚`}
-        >
-          {/* Stacked card layers */}
-          <div className="w-10 h-7 rounded bg-gradient-to-br from-indigo-900 to-slate-900 border border-cyan-500/40 shadow-md flex flex-col items-center justify-center relative overflow-hidden">
-            <div className="absolute top-0 inset-x-0 h-0.5 bg-cyan-400/60" />
-            <div className="flex items-center space-x-0.5 z-10">
-              <Layers size={9} className="text-cyan-400" />
-              <span className="font-mono font-black text-[9.5px] text-white leading-none">{deckCount}</span>
-            </div>
-            <span className="text-[6px] font-black text-cyan-300/80 tracking-tighter uppercase leading-none mt-0.5">DECK</span>
-          </div>
-          {/* Shadow fake stacked card under */}
-          <div className="absolute -bottom-0.5 inset-x-1 h-1 rounded-b bg-slate-950/80 border-b border-white/20 -z-10" />
-        </div>
-
-        {/* Archive (Graveyard) Button */}
-        <button
-          type="button"
-          onClick={onOpenArchive}
-          className="w-10 h-7 rounded bg-gradient-to-br from-purple-950/90 to-slate-950 hover:from-purple-900 hover:to-slate-900 border border-purple-500/40 hover:border-purple-400 shadow-md flex flex-col items-center justify-center transition-all cursor-pointer active:scale-95"
-          title={`自軍アーカイブ(墓地): ${archiveCount}枚 (タップで閲覧)`}
-        >
-          <div className="flex items-center space-x-0.5">
-            <Archive size={9} className="text-purple-400" />
-            <span className="font-mono font-black text-[9.5px] text-purple-200 leading-none">{archiveCount}</span>
-          </div>
-          <span className="text-[6px] font-black text-purple-300/80 tracking-tighter uppercase leading-none mt-0.5">GRAVE</span>
-        </button>
-      </div>
     </div>
   );
 };

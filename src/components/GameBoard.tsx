@@ -420,45 +420,82 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
         </div>
 
         {/* ========================================================================= */}
-        {/* 1. TOP FLOATING CONTROLS: Left Menu & Center Opponent Info / Shield Badge */}
+        {/* 1. TOP FLOATING CONTROLS: Left Menu, Opponent Hand, Avatar & Top-Right    */}
         {/* ========================================================================= */}
 
-        {/* Top-Left: Hamburger Menu Button & SCRIPTIA Logo */}
-        <div className="absolute top-2 left-2.5 z-40 flex items-center space-x-2 pointer-events-auto">
+        {/* Top-Left: Hamburger Menu Button & Turn Counter (NO SCRIPTIA Logo) */}
+        <div className="absolute top-2 left-2.5 z-40 flex items-center space-x-1.5 pointer-events-auto select-none">
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               setShowMenu(!showMenu);
             }}
-            className="w-7 h-7 rounded-lg bg-black/60 hover:bg-black/90 border border-white/20 hover:border-cyan-400 flex items-center justify-center text-slate-200 hover:text-white transition-all shadow-md active:scale-95 cursor-pointer backdrop-blur-sm"
+            className="w-7 h-7 rounded-lg bg-black/70 hover:bg-black/90 border border-white/20 hover:border-cyan-400 flex items-center justify-center text-slate-200 hover:text-white transition-all shadow-md active:scale-95 cursor-pointer backdrop-blur-sm"
             title="メニューを開く"
           >
             <Menu size={15} />
           </button>
-          <div className="flex items-baseline space-x-1 select-none">
-            <span className="font-black text-[12px] tracking-wider bg-gradient-to-r from-amber-300 via-yellow-200 to-cyan-300 bg-clip-text text-transparent drop-shadow">
-              SCRIPTIA
-            </span>
-            <span className="text-[8px] font-mono text-cyan-400/80 font-bold">
-              T{state.turnCount}
-            </span>
-          </div>
+          <span className="px-1.5 py-0.5 rounded bg-black/60 border border-white/10 text-[9px] font-mono font-bold text-cyan-400 shadow">
+            T{state.turnCount}
+          </span>
         </div>
 
-        {/* Top-Center: Floating Opponent Status Panel & Opponent Shield Badge */}
-        <div className="absolute top-1.5 left-1/2 -translate-x-1/2 z-40 pointer-events-auto select-none">
-          <div className="flex items-center space-x-2 bg-slate-950/80 backdrop-blur-md px-2.5 py-1 rounded-full border border-red-500/40 shadow-xl">
-            {/* Opponent Avatar & Label */}
-            <div className="flex items-center space-x-1.5 pr-1 border-r border-white/10">
-              <div className="w-5 h-5 rounded-full bg-gradient-to-br from-red-700 to-indigo-900 border border-amber-300 flex items-center justify-center shadow">
-                <User size={11} className="text-yellow-200" />
+        {/* Top-Left: Opponent Hand Cards Fan (Duel Masters IMG_9587 style) */}
+        <div className="absolute top-0 left-16 z-30 flex items-start pointer-events-none select-none">
+          {opp.hand.map((c, idx) => {
+            const total = opp.hand.length;
+            const rot = -6 + (idx * 3.5);
+            const translateY = Math.sin((idx / Math.max(total - 1, 1)) * Math.PI) * 4;
+            return (
+              <div
+                key={c.instanceId}
+                style={{
+                  transform: `rotate(${rot}deg) translateY(${translateY}px)`,
+                  marginLeft: idx === 0 ? 0 : '-14px',
+                }}
+                className="w-[32px] h-[46px] rounded bg-gradient-to-b from-indigo-950 via-slate-950 to-blue-950 border border-amber-400/70 shadow-lg flex items-center justify-center relative overflow-hidden shrink-0 transition-transform"
+              >
+                <div className="absolute inset-0.5 rounded-sm border border-cyan-400/40 bg-gradient-to-br from-indigo-900/60 to-black flex items-center justify-center">
+                  <div className="w-3.5 h-5 rounded-full border border-amber-300/40 flex items-center justify-center">
+                    <div className="w-1.5 h-1.5 rounded-full bg-amber-400/80 shadow-[0_0_6px_rgba(251,191,36,1)]" />
+                  </div>
+                </div>
               </div>
-              <span className="text-[9px] font-black tracking-tight text-slate-200">OPPONENT</span>
-            </div>
+            );
+          })}
+        </div>
 
-            {/* Quick Counters: Deck, Hand, Graveyard */}
-            <div className="flex items-center space-x-1.5 text-[8.5px] font-mono text-slate-300">
+        {/* Top-Center: Opponent Avatar (Direct Attack targetable when canDirectAttack) */}
+        <div className="absolute top-1.5 left-1/2 -translate-x-1/2 z-30 pointer-events-auto select-none">
+          <button
+            type="button"
+            disabled={!canDirectAttack}
+            onClick={handleOpponentDirectAttack}
+            className={`flex items-center space-x-1.5 px-3 py-1 rounded-full border backdrop-blur-md shadow-xl transition-all ${
+              canDirectAttack
+                ? 'bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 border-yellow-200 text-slate-950 ring-2 ring-yellow-300 animate-bounce cursor-pointer shadow-[0_0_20px_rgba(250,204,21,1)]'
+                : 'bg-slate-950/80 border-red-500/40 text-slate-200'
+            }`}
+            title={canDirectAttack ? '相手プレイヤーにダイレクトアタック！' : '相手プレイヤー'}
+          >
+            <div className="w-5 h-5 rounded-full bg-gradient-to-br from-red-700 to-indigo-900 border border-amber-300 flex items-center justify-center shadow">
+              <User size={11} className={canDirectAttack ? 'text-slate-950' : 'text-yellow-200'} />
+            </div>
+            <span className="text-[9.5px] font-black tracking-tight uppercase">
+              {canDirectAttack ? 'DIRECT ATTACK!' : 'OPPONENT'}
+            </span>
+          </button>
+        </div>
+
+        {/* Top-Right: Opponent CARD COUNT & Circular Mana Zone (Duel Masters Symmetrical Layout) */}
+        <div className="absolute top-2 right-2.5 z-40 flex items-center space-x-2 pointer-events-auto select-none">
+          {/* Opponent CARD COUNT Panel (Trapezoid Cyber Banner: IMG_9587) */}
+          <div className="flex flex-col items-end mr-0.5 select-none">
+            <span className="text-[6.5px] font-black tracking-widest text-purple-300/80 uppercase mb-0.5">
+              CARD COUNT
+            </span>
+            <div className="flex items-center space-x-1 bg-slate-950/85 backdrop-blur-md px-2 py-0.5 rounded-full border border-purple-500/40 shadow-xl text-[8.5px] font-mono text-slate-200">
               {/* Deck */}
               <div className="flex items-center space-x-0.5 bg-black/40 px-1.5 py-0.5 rounded border border-white/10" title="相手山札">
                 <span className="text-amber-400 font-bold">山</span>
@@ -469,75 +506,51 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
                 <span className="text-cyan-400 font-bold">手</span>
                 <span>{opp.hand.length}</span>
               </div>
-              {/* Graveyard (Clickable) */}
+              {/* Archive (Clickable) */}
               <button
                 type="button"
                 onClick={() =>
                   setZoneModal({
                     isOpen: true,
-                    title: '相手のアーカイブ(墓地)',
+                    title: '相手のアーカイブ',
                     zoneType: 'archive',
                     cards: opp.archive,
                     isOpponent: true,
                   })
                 }
-                className="flex items-center space-x-0.5 bg-purple-950/60 hover:bg-purple-900/80 px-1.5 py-0.5 rounded border border-purple-500/40 text-purple-200 cursor-pointer active:scale-95"
-                title="相手のアーカイブ(墓地)を確認"
+                className="flex items-center space-x-0.5 bg-purple-950/70 hover:bg-purple-900 px-1.5 py-0.5 rounded border border-purple-500/40 text-purple-200 cursor-pointer active:scale-95 transition-all"
+                title="相手のアーカイブを確認"
               >
-                <span className="text-purple-400 font-bold">墓</span>
+                <span className="text-purple-300 font-bold">ARCHIVE</span>
                 <span>{opp.archive.length}</span>
               </button>
             </div>
-
-            {/* Opponent Mana / Arcana Quick Pill */}
-            <div className="pl-1 border-l border-white/10">
-              <ArcanaGauge
-                current={opp.currentArcana}
-                max={opp.maxArcana}
-                arcanaCards={opp.arcana}
-                onOpenArcana={() =>
-                  setZoneModal({
-                    isOpen: true,
-                    title: '相手のアルカナゾーン',
-                    zoneType: 'arcana',
-                    cards: opp.arcana,
-                    isOpponent: true,
-                  })
-                }
-                isOpponent
-              />
-            </div>
-
-            {/* OPPONENT SHIELD (BARRIER) BADGE - Duel Masters Style */}
-            <button
-              type="button"
-              onClick={handleOpponentDirectAttack}
-              className={`flex items-center space-x-1 px-2 py-0.5 rounded-full border transition-all select-none shadow-md ${
-                canDirectAttack
-                  ? 'bg-gradient-to-r from-amber-400 to-yellow-300 text-slate-950 border-yellow-100 ring-2 ring-yellow-400 animate-pulse shadow-[0_0_16px_rgba(250,204,21,1)] cursor-pointer active:scale-95'
-                  : 'bg-gradient-to-r from-red-950 to-slate-900 border-red-500/40 text-red-200'
-              }`}
-              title={canDirectAttack ? '相手の結界を直接攻撃！' : `相手結界シールド: ${opp.barrier}/5`}
-            >
-              <Shield size={12} className={canDirectAttack ? 'fill-current text-slate-950 stroke-[2]' : 'fill-red-500/40 text-red-400'} />
-              <span className="font-mono font-black text-[10.5px] leading-none">
-                {opp.barrier}
-              </span>
-              {canDirectAttack && (
-                <span className="text-[7.5px] font-black tracking-tighter uppercase px-1 py-0.2 bg-slate-950 text-yellow-300 rounded">
-                  ATTACK!
-                </span>
-              )}
-            </button>
           </div>
+
+          {/* Opponent 3D Circular Arcana Orb (diameter ~64px) */}
+          <ArcanaGauge
+            current={opp.currentArcana}
+            max={opp.maxArcana}
+            arcanaCards={opp.arcana}
+            onOpenArcana={() =>
+              setZoneModal({
+                isOpen: true,
+                title: '相手のアルカナゾーン',
+                zoneType: 'arcana',
+                cards: opp.arcana,
+                isOpponent: true,
+              })
+            }
+            isOpponent
+          />
         </div>
 
         {/* ========================================================================= */}
-        {/* 2. LEFT CYBER SLOTS: Domain & Runes (Transparent Floating Hex-Frames)     */}
+        {/* 2. LEFT CYBER SLOTS: Domain & Runes (Shifted Inwards / Right-Offset)       */}
         {/* ========================================================================= */}
 
-        {/* Top-Left: Opponent Domain & Runes */}
-        <div className="absolute top-11 left-2 z-20 flex flex-col space-y-1.5 pointer-events-auto select-none">
+        {/* Top-Left: Opponent Domain & Runes (Shifted Inwards to left-6) */}
+        <div className="absolute top-12 left-6 z-20 flex flex-col space-y-1.5 pointer-events-auto select-none">
           {/* Opponent Domain */}
           <div className="flex flex-col items-center">
             <span className="text-[6px] font-black text-amber-400/80 uppercase tracking-tighter mb-0.5">DOMAIN</span>
@@ -574,8 +587,8 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
           </div>
         </div>
 
-        {/* Bottom-Left: Player Runes & Domain (Right above Mana Orb) */}
-        <div className="absolute bottom-22 left-2 z-20 flex flex-col space-y-1.5 pointer-events-auto select-none">
+        {/* Bottom-Left: Player Runes & Domain (Shifted Inwards to left-6) */}
+        <div className="absolute bottom-22 left-6 z-20 flex flex-col space-y-1.5 pointer-events-auto select-none">
           {/* Player Runes (2 Sockets) */}
           <div className="flex flex-col items-center space-y-0.5">
             <span className="text-[6px] font-black text-cyan-400/80 uppercase tracking-tighter">YOU RUNES</span>
@@ -617,7 +630,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
         {/* ========================================================================= */}
         <div
           id="center-arena"
-          className="absolute inset-x-12 top-9 bottom-4 flex flex-col justify-between items-center px-2 z-10 pointer-events-auto"
+          className="absolute inset-x-16 top-9 bottom-4 flex flex-col justify-between items-center px-2 z-10 pointer-events-auto"
         >
           {/* Guide Banner for Targeted Spells or Combat Attack Target */}
           {selectedCardId && me.hand.some(c => c.instanceId === selectedCardId && getCard(c.cardId).type === 'Spell' && getCard(c.cardId).targetReq) && (
@@ -804,10 +817,10 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
         </div>
 
         {/* ========================================================================= */}
-        {/* 4. BOTTOM-LEFT: Circular Mana Zone, Card Counts, Avatar & Shield Badge    */}
+        {/* 4. BOTTOM-LEFT: Circular Mana Zone, DECK & ARCHIVE Panel, Player Avatar   */}
         {/* ========================================================================= */}
-        <div className="absolute bottom-1.5 left-2 z-40 flex items-center space-x-2 pointer-events-auto select-none">
-          {/* 72px 3D Arcana Orb */}
+        <div className="absolute bottom-1.5 left-2.5 z-40 flex items-center space-x-2 pointer-events-auto select-none">
+          {/* 3D Circular Arcana Orb (diameter ~64px) */}
           <ArcanaGauge
             current={me.currentArcana}
             max={me.maxArcana}
@@ -821,38 +834,44 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
                 isOpponent: false,
               })
             }
+            isOpponent={false}
           />
 
-          {/* Player Card Count Bar (Duel Masters Metallic Cyan Bar: IMG_9585) */}
-          <div className="flex items-center space-x-1.5 bg-slate-950/80 backdrop-blur-md px-2 py-1 rounded-full border border-cyan-500/40 shadow-xl text-[8.5px] font-mono text-slate-200">
-            {/* Deck */}
-            <div className="flex items-center space-x-0.5 bg-black/40 px-1.5 py-0.5 rounded border border-white/10" title="自分の山札">
-              <span className="text-amber-400 font-bold">山</span>
-              <span>{me.deck.length}</span>
+          {/* Player DECK & ARCHIVE Panel (Duel Masters Metallic Cyan CARD COUNT: IMG_9587) */}
+          <div className="flex flex-col items-start select-none">
+            <span className="text-[6.5px] font-black tracking-widest text-cyan-300/80 uppercase mb-0.5">
+              CARD COUNT
+            </span>
+            <div className="flex items-center space-x-1 bg-slate-950/85 backdrop-blur-md px-2 py-0.5 rounded-full border border-cyan-500/40 shadow-xl text-[8.5px] font-mono text-slate-200">
+              {/* Deck */}
+              <div className="flex items-center space-x-0.5 bg-black/40 px-1.5 py-0.5 rounded border border-white/10" title="自分の山札">
+                <span className="text-amber-400 font-bold">山</span>
+                <span>{me.deck.length}</span>
+              </div>
+              {/* Hand */}
+              <div className="flex items-center space-x-0.5 bg-black/40 px-1.5 py-0.5 rounded border border-white/10" title="自分の手札">
+                <span className="text-cyan-400 font-bold">手</span>
+                <span>{me.hand.length}</span>
+              </div>
+              {/* Archive (Clickable) */}
+              <button
+                type="button"
+                onClick={() =>
+                  setZoneModal({
+                    isOpen: true,
+                    title: '自分のアーカイブ',
+                    zoneType: 'archive',
+                    cards: me.archive,
+                    isOpponent: false,
+                  })
+                }
+                className="flex items-center space-x-0.5 bg-purple-950/70 hover:bg-purple-900 px-1.5 py-0.5 rounded border border-purple-500/40 text-purple-200 cursor-pointer active:scale-95 transition-all"
+                title="自分のアーカイブを確認"
+              >
+                <span className="text-purple-300 font-bold">ARCHIVE</span>
+                <span>{me.archive.length}</span>
+              </button>
             </div>
-            {/* Hand */}
-            <div className="flex items-center space-x-0.5 bg-black/40 px-1.5 py-0.5 rounded border border-white/10" title="自分の手札">
-              <span className="text-cyan-400 font-bold">手</span>
-              <span>{me.hand.length}</span>
-            </div>
-            {/* Graveyard (Clickable) */}
-            <button
-              type="button"
-              onClick={() =>
-                setZoneModal({
-                  isOpen: true,
-                  title: '自分のアーカイブ(墓地)',
-                  zoneType: 'archive',
-                  cards: me.archive,
-                  isOpponent: false,
-                })
-              }
-              className="flex items-center space-x-0.5 bg-purple-950/60 hover:bg-purple-900/80 px-1.5 py-0.5 rounded border border-purple-500/40 text-purple-200 cursor-pointer active:scale-95"
-              title="自分のアーカイブ(墓地)を確認"
-            >
-              <span className="text-purple-400 font-bold">墓</span>
-              <span>{me.archive.length}</span>
-            </button>
           </div>
 
           {/* Player Avatar (Duel Masters Cyber Portrait) */}
@@ -861,19 +880,6 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
               <User size={11} className="text-cyan-200" />
             </div>
             <span className="text-[9px] font-black text-slate-200 tracking-tight">PLAYER</span>
-          </div>
-
-          {/* Player Pentagon Shield Badge (Duel Masters signature: IMG_9585) */}
-          <div
-            className="relative w-8 h-9 flex items-center justify-center filter drop-shadow-[0_0_8px_rgba(6,182,212,0.8)] active:scale-95 transition-transform"
-            title={`自軍結界シールド: ${me.barrier}/5`}
-          >
-            <svg viewBox="0 0 40 46" className="w-full h-full fill-cyan-600/90 stroke-cyan-300 stroke-[2.5]">
-              <polygon points="20,1 38,10 32,44 20,40 8,44 2,10" />
-            </svg>
-            <span className="absolute font-mono font-black text-sm text-white drop-shadow-[0_0_4px_rgba(0,0,0,0.8)]">
-              {me.barrier}
-            </span>
           </div>
         </div>
 
@@ -889,7 +895,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
         )}
 
         {/* ========================================================================= */}
-        {/* 5. RIGHT CONTROLS: 3D Turn End Button, Layered Deck & Graveyard (Middle)  */}
+        {/* 5. RIGHT CONTROLS: 3D Turn End Button (Middle)                            */}
         {/* ========================================================================= */}
         <div className="absolute bottom-[96px] right-2 z-40 pointer-events-auto">
           <ActionControls
@@ -900,23 +906,12 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
             hasPrompt={!!state.prompt}
             selectedCardId={selectedCardId}
             isHandSelected={!!selectedCardId && me.hand.some(c => c.instanceId === selectedCardId)}
-            deckCount={me.deck.length}
-            archiveCount={me.archive.length}
             onNextPhase={() => {
               dispatch({ type: 'NEXT_PHASE' });
               setArcanaMode(false);
               setSelectedCardId(null);
             }}
             onArcanaCharge={handleArcanaChargeBtn}
-            onOpenArchive={() =>
-              setZoneModal({
-                isOpen: true,
-                title: '自分のアーカイブ(墓地)',
-                zoneType: 'archive',
-                cards: me.archive,
-                isOpponent: false,
-              })
-            }
           />
         </div>
 
