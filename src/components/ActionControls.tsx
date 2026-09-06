@@ -32,91 +32,110 @@ export const ActionControls: React.FC<Props> = ({
   const canAct = isMyTurn && !hasPrompt;
 
   return (
-    <div className="flex flex-col items-end space-y-1.5 pointer-events-auto select-none shrink-0">
-      {/* Upper Utility: Player Deck & Archive Counters */}
-      <div className="flex items-center space-x-1 text-[9.5px] font-bold">
-        {/* Deck Count */}
-        <div
-          className="flex items-center space-x-1 bg-slate-900/90 border border-slate-700/80 px-2 py-1 rounded-md text-slate-200 shadow-sm"
-          title={`自軍山札残り: ${deckCount}枚`}
-        >
-          <Layers size={11} className="text-amber-400" />
-          <span className="font-mono font-bold text-white text-[10px]">{deckCount}</span>
+    <div className="flex flex-col items-center space-y-1.5 pointer-events-auto select-none shrink-0">
+      {/* 3D Cyber "TURN END" / Phase Advance Button (Duel Masters Plays Iconic Shape) */}
+      <button
+        type="button"
+        disabled={!canAct}
+        onClick={onNextPhase}
+        className={`relative group w-22 sm:w-24 h-11 sm:h-12 rounded-2xl font-black tracking-wider transition-all select-none shadow-2xl active:scale-95 flex flex-col items-center justify-center border-2 shrink-0 ${
+          canAct
+            ? phase === 'ARCANA_PLACEMENT'
+              ? 'bg-gradient-to-b from-cyan-500 via-blue-600 to-indigo-900 border-cyan-300 text-white shadow-[0_0_15px_rgba(6,182,212,0.6)] hover:brightness-110 cursor-pointer'
+              : 'bg-gradient-to-b from-amber-300 via-yellow-500 to-amber-600 border-amber-200 text-slate-950 shadow-[0_0_20px_rgba(245,158,11,0.8)] hover:brightness-110 ring-2 ring-yellow-300/80 animate-pulse cursor-pointer'
+            : 'bg-gradient-to-b from-slate-800 via-slate-900 to-slate-950 border-slate-700/60 text-slate-500 cursor-not-allowed opacity-75'
+        }`}
+        style={{
+          boxShadow: canAct
+            ? '0 4px 0 rgba(0,0,0,0.8), 0 8px 16px rgba(0,0,0,0.6)'
+            : '0 2px 0 rgba(0,0,0,0.8)',
+          transform: canAct ? 'translateY(-2px)' : 'none',
+        }}
+      >
+        {/* Internal 3D Specular Highlight */}
+        <div className="absolute top-0.5 inset-x-2 h-1/3 rounded-t-xl bg-gradient-to-b from-white/40 to-transparent pointer-events-none" />
+
+        {/* Action Label */}
+        <div className="flex items-center space-x-1 z-10 text-[10.5px] sm:text-[11.5px] leading-tight font-black">
+          {!isMyTurn ? (
+            <>
+              <Loader2 size={12} className="animate-spin text-amber-400" />
+              <span className="font-bold tracking-tighter">WAIT</span>
+            </>
+          ) : phase === 'ARCANA_PLACEMENT' ? (
+            <>
+              <span className="drop-shadow">行動へ</span>
+              <ChevronRight size={13} className="stroke-[3]" />
+            </>
+          ) : (
+            <>
+              <span className="drop-shadow font-black">TURN END</span>
+              <ChevronRight size={13} className="stroke-[3]" />
+            </>
+          )}
         </div>
 
-        {/* Archive / Graveyard */}
+        {/* Phase Subtitle */}
+        {isMyTurn && (
+          <span className={`text-[7.5px] font-mono tracking-tighter uppercase leading-none opacity-80 ${
+            phase === 'ARCANA_PLACEMENT' ? 'text-cyan-100' : 'text-slate-950'
+          }`}>
+            {phase === 'ARCANA_PLACEMENT' ? 'CHARGE PHASE' : 'ACTION PHASE'}
+          </span>
+        )}
+      </button>
+
+      {/* Secondary Row: Quick Arcana Charge Button (in Arcana Phase) */}
+      {phase === 'ARCANA_PLACEMENT' && isMyTurn && !hasPlacedArcanaThisTurn && (
+        <button
+          type="button"
+          onClick={onArcanaCharge}
+          className={`w-full py-1 rounded-lg font-black text-[9px] transition-all shadow-md active:scale-95 flex items-center justify-center space-x-1 border shrink-0 cursor-pointer ${
+            isHandSelected
+              ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white border-blue-300 ring-2 ring-blue-400 animate-pulse'
+              : 'bg-blue-950/90 hover:bg-blue-900 text-blue-200 border-blue-500/60'
+          }`}
+        >
+          <Zap size={10} className="text-yellow-300 fill-yellow-300" />
+          <span>{isHandSelected ? 'チャージ決定' : 'アルカナ充填'}</span>
+        </button>
+      )}
+
+      {/* Cyber Deck Stack & Archive Buttons */}
+      <div className="flex items-center space-x-1 pt-0.5">
+        {/* Layered Deck Stack (Duel Masters 3D card deck) */}
+        <div
+          className="relative group cursor-default"
+          title={`自軍山札残り: ${deckCount}枚`}
+        >
+          {/* Stacked card layers */}
+          <div className="w-10 h-7 rounded bg-gradient-to-br from-indigo-900 to-slate-900 border border-cyan-500/40 shadow-md flex flex-col items-center justify-center relative overflow-hidden">
+            <div className="absolute top-0 inset-x-0 h-0.5 bg-cyan-400/60" />
+            <div className="flex items-center space-x-0.5 z-10">
+              <Layers size={9} className="text-cyan-400" />
+              <span className="font-mono font-black text-[9.5px] text-white leading-none">{deckCount}</span>
+            </div>
+            <span className="text-[6px] font-black text-cyan-300/80 tracking-tighter uppercase leading-none mt-0.5">DECK</span>
+          </div>
+          {/* Shadow fake stacked card under */}
+          <div className="absolute -bottom-0.5 inset-x-1 h-1 rounded-b bg-slate-950/80 border-b border-white/20 -z-10" />
+        </div>
+
+        {/* Archive (Graveyard) Button */}
         <button
           type="button"
           onClick={onOpenArchive}
-          className="flex items-center space-x-1 bg-slate-900/90 hover:bg-slate-800 border border-purple-500/40 hover:border-purple-400 px-2 py-1 rounded-md text-purple-300 shadow-sm cursor-pointer transition-colors active:scale-95"
-          title={`自軍アーカイブ: ${archiveCount}枚 (タップで確認)`}
+          className="w-10 h-7 rounded bg-gradient-to-br from-purple-950/90 to-slate-950 hover:from-purple-900 hover:to-slate-900 border border-purple-500/40 hover:border-purple-400 shadow-md flex flex-col items-center justify-center transition-all cursor-pointer active:scale-95"
+          title={`自軍アーカイブ(墓地): ${archiveCount}枚 (タップで閲覧)`}
         >
-          <Archive size={11} className="text-purple-400" />
-          <span className="font-mono font-bold text-purple-200 text-[10px]">{archiveCount}</span>
-        </button>
-      </div>
-
-      {/* Main Action Buttons */}
-      <div className="flex items-center space-x-1.5">
-        {/* Arcana Placement Quick Button (in Arcana Phase) */}
-        {phase === 'ARCANA_PLACEMENT' && isMyTurn && !hasPlacedArcanaThisTurn && (
-          <button
-            type="button"
-            onClick={onArcanaCharge}
-            className={`px-2 py-1.5 rounded-xl font-black text-[10px] transition-all shadow-md active:scale-95 flex items-center space-x-1 border shrink-0 ${
-              isHandSelected
-                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white border-blue-300 ring-2 ring-blue-400 animate-pulse'
-                : 'bg-blue-950/90 hover:bg-blue-900 text-blue-200 border-blue-500/60'
-            }`}
-          >
-            <Zap size={12} className="text-yellow-300 fill-yellow-300" />
-            <span>{isHandSelected ? 'チャージ' : 'アルカナ'}</span>
-          </button>
-        )}
-
-        {/* Heavy 3D "TURN END" / "行動フェーズ ＞" Button (Duel Masters Plays Inspired) */}
-        <button
-          type="button"
-          disabled={!canAct}
-          onClick={onNextPhase}
-          className={`relative group w-24 sm:w-26 h-11 sm:h-12 rounded-xl font-black tracking-wider transition-all select-none shadow-2xl active:scale-95 flex items-center justify-center border-2 shrink-0 ${
-            canAct
-              ? phase === 'ARCANA_PLACEMENT'
-                ? 'bg-gradient-to-b from-blue-500 via-indigo-600 to-blue-800 border-blue-300/80 text-white shadow-blue-500/40 hover:brightness-110'
-                : 'bg-gradient-to-b from-amber-400 via-yellow-500 to-amber-600 border-yellow-200 text-slate-950 shadow-yellow-500/50 hover:brightness-110 ring-2 ring-amber-300/60 animate-pulse'
-              : 'bg-gradient-to-b from-slate-800 via-slate-900 to-slate-950 border-slate-700/60 text-slate-500 cursor-not-allowed'
-          }`}
-          style={{
-            boxShadow: canAct
-              ? '0 4px 0 rgba(0,0,0,0.6), 0 6px 14px rgba(0,0,0,0.4)'
-              : '0 3px 0 rgba(0,0,0,0.8)',
-            transform: canAct ? 'translateY(-2px)' : 'none',
-          }}
-        >
-          {/* Internal 3D Glint */}
-          <div className="absolute top-0.5 inset-x-1.5 h-1/3 rounded-t-lg bg-gradient-to-b from-white/30 to-transparent pointer-events-none" />
-
-          {/* Label Content */}
-          <div className="flex items-center space-x-1 z-10 text-[11px] sm:text-xs">
-            {!isMyTurn ? (
-              <>
-                <Loader2 size={13} className="animate-spin text-amber-400" />
-                <span className="font-bold tracking-tight">思考中...</span>
-              </>
-            ) : phase === 'ARCANA_PLACEMENT' ? (
-              <>
-                <span>行動フェーズ</span>
-                <ChevronRight size={13} />
-              </>
-            ) : (
-              <>
-                <span className="drop-shadow">TURN END</span>
-                <ChevronRight size={13} className="stroke-[3]" />
-              </>
-            )}
+          <div className="flex items-center space-x-0.5">
+            <Archive size={9} className="text-purple-400" />
+            <span className="font-mono font-black text-[9.5px] text-purple-200 leading-none">{archiveCount}</span>
           </div>
+          <span className="text-[6px] font-black text-purple-300/80 tracking-tighter uppercase leading-none mt-0.5">GRAVE</span>
         </button>
       </div>
     </div>
   );
 };
+

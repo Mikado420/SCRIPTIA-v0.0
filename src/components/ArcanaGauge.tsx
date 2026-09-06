@@ -75,50 +75,58 @@ export const ArcanaGauge: React.FC<Props> = ({
   // Circular Arcana Orb (Duel Masters Plays Mana Zone Orb style) for Player (Bottom-Left)
   return (
     <div className="flex items-center space-x-1.5 select-none pointer-events-auto shrink-0">
-      {/* 3D Circular Arcana Orb (diameter ~64px) */}
+      {/* 3D Circular Arcana Orb (diameter ~72px) */}
       <button
         type="button"
         onClick={onOpenArcana}
         className="relative group cursor-pointer active:scale-95 transition-transform"
         title="アルカナゾーン確認 (タップで展開)"
       >
-        {/* Pulsing Aura */}
-        <div className="absolute -inset-1 rounded-full bg-cyan-500/30 blur group-hover:bg-cyan-400/50 transition-colors animate-pulse" />
+        {/* Pulsing Mana Aura */}
+        <div className="absolute -inset-1.5 rounded-full bg-cyan-500/30 blur-md group-hover:bg-cyan-400/60 transition-colors animate-pulse" />
 
-        {/* Outer Metallic Bezel */}
-        <div className="relative w-15 h-15 sm:w-16 sm:h-16 rounded-full bg-gradient-to-b from-slate-700 via-slate-900 to-black p-0.5 shadow-xl border-2 border-amber-400/80 flex items-center justify-center">
+        {/* Outer Metallic Bezel with Cyber Ring */}
+        <div className="relative w-[72px] h-[72px] rounded-full bg-gradient-to-b from-amber-300 via-slate-900 to-black p-1 shadow-[0_4px_16px_rgba(0,0,0,0.8)] border-2 border-amber-400 flex items-center justify-center">
           {/* Inner Glowing Crystal Sphere */}
-          <div className="w-full h-full rounded-full bg-gradient-to-br from-indigo-950 via-slate-950 to-blue-950 border border-cyan-400/50 flex flex-col items-center justify-center relative overflow-hidden shadow-inner">
-            {/* Top Label */}
-            <span className="text-[6.5px] font-black text-cyan-300 tracking-wider leading-none">
-              ARCANA
+          <div className="w-full h-full rounded-full bg-gradient-to-br from-cyan-950 via-slate-950 to-blue-950 border border-cyan-400/60 flex flex-col items-center justify-center relative overflow-hidden shadow-inner">
+            {/* Top Gloss Highlight */}
+            <div className="absolute top-0 inset-x-2 h-1/2 rounded-t-full bg-gradient-to-b from-white/30 to-transparent pointer-events-none" />
+
+            {/* Top Micro Label */}
+            <span className="text-[6.5px] font-black text-cyan-300 tracking-wider uppercase leading-none z-10">
+              MANA
             </span>
 
-            {/* Digital Numbers */}
-            <div className="flex items-baseline justify-center font-mono font-black text-white leading-none my-0.5">
-              <span className="text-base sm:text-lg text-cyan-200 drop-shadow-[0_0_8px_rgba(56,189,248,0.9)]">
+            {/* Digital Numbers: Current / Max */}
+            <div className="flex items-baseline justify-center font-mono font-black text-white leading-none my-0.5 z-10">
+              <span className="text-xl text-cyan-200 drop-shadow-[0_0_10px_rgba(56,189,248,1)]">
                 {current}
               </span>
-              <span className="text-[9px] text-cyan-400/70 mx-0.5">/</span>
-              <span className="text-[9px] text-slate-400">
+              <span className="text-[10px] text-cyan-400/80 mx-0.5">/</span>
+              <span className="text-[11px] text-slate-300">
                 {max}
               </span>
             </div>
+
+            {/* Bottom mini status */}
+            <span className="text-[6px] font-bold text-amber-300/90 z-10">
+              ARCANA
+            </span>
           </div>
         </div>
       </button>
 
-      {/* 5 Elemental Affinity Gems Column / Cluster */}
-      <div className="flex flex-col space-y-0.5 bg-black/50 p-1 rounded-lg border border-white/10 shadow-sm">
+      {/* 5 Elemental Affinity Gems Vertical Column */}
+      <div className="flex flex-col space-y-1 bg-black/60 backdrop-blur-sm p-1 rounded-xl border border-white/10 shadow-md">
         {ELEMENTAL_SYSTEMS.map(sys => {
           const isActive = activeSystems.has(sys.id);
           return (
             <div
               key={sys.id}
-              className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[6.5px] font-black border transition-all ${
+              className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[6px] font-black border transition-all ${
                 isActive
-                  ? `${sys.color} ${sys.glow} border-white/60 scale-105`
-                  : 'bg-slate-900 border-slate-700 text-slate-600 opacity-40 grayscale'
+                  ? `${sys.color} ${sys.glow} border-white/80 scale-110`
+                  : 'bg-slate-900/90 border-slate-700 text-slate-600 opacity-30 grayscale'
               }`}
               title={`${sys.name}系統: ${isActive ? '解放済' : '未解放'}`}
             >

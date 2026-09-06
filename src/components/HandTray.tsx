@@ -3,7 +3,7 @@ import { CardView } from './CardView';
 import { CardInstance, GameState, GameAction } from '../types';
 import { getCard } from '../data/cards';
 import { canPlayCard } from '../engine/engineUtils';
-import { Sparkles, Zap, Info, Play, X } from 'lucide-react';
+import { Zap, Play, Info, X } from 'lucide-react';
 
 interface Props {
   hand: CardInstance[];
@@ -29,17 +29,21 @@ export const HandTray: React.FC<Props> = ({
   const me = state.player1;
   const isMyTurn = state.currentPlayer === 'player1';
 
-  // Dynamic overlap based on hand card count
-  const getOverlapClass = () => {
-    if (hand.length <= 3) return 'space-x-1';
-    if (hand.length <= 5) return '-space-x-1.5';
-    if (hand.length <= 7) return '-space-x-3.5';
-    return '-space-x-5';
+  // Dynamic overlap for right-aligned hand fan (Duel Masters Plays style)
+  const getOverlapMargin = () => {
+    if (hand.length <= 1) return '';
+    if (hand.length <= 3) return '-ml-4';
+    if (hand.length <= 5) return '-ml-6 sm:-ml-7';
+    if (hand.length <= 7) return '-ml-7 sm:-ml-8';
+    return '-ml-8 sm:-ml-9';
   };
 
   return (
-    <div className="relative flex items-end justify-center pointer-events-auto h-[84px] select-none">
-      <div className={`flex items-end justify-center ${getOverlapClass()} px-1`}>
+    <div
+      id="hand-tray-container"
+      className="relative flex items-end justify-end pointer-events-auto h-[92px] select-none pr-1"
+    >
+      <div className="flex items-end justify-end">
         {hand.map((c, i) => {
           const isSelected = selectedCard === c.instanceId;
           const cardData = getCard(c.cardId);
@@ -55,24 +59,37 @@ export const HandTray: React.FC<Props> = ({
             state.phase === 'ARCANA_PLACEMENT' &&
             !state.flags.hasPlacedArcanaThisTurn;
 
+          // Slight rotation or curve for fan effect if multiple cards
+          const rotDeg = Math.max(-8, Math.min(8, (i - (hand.length - 1) / 2) * 2.5));
+
           return (
             <div
               key={c.instanceId}
-              style={{ zIndex: isSelected ? 50 : 10 + i }}
-              className="relative shrink-0 select-none group"
+              style={{
+                zIndex: isSelected ? 60 : 10 + i,
+              }}
+              className={`relative shrink-0 select-none group transition-all duration-200 ${
+                i > 0 ? getOverlapMargin() : ''
+              }`}
             >
               {/* Rising Card Container */}
               <div
+                style={{
+                  transform: isSelected
+                    ? 'translateY(-26px) scale(1.18)'
+                    : `rotate(${rotDeg}deg) translateY(0px)`,
+                  transformOrigin: 'bottom center',
+                }}
                 className={`transition-all duration-200 ease-out origin-bottom ${
                   isSelected
-                    ? '-translate-y-4 scale-105 z-50'
-                    : 'translate-y-0 hover:-translate-y-1 hover:scale-105'
+                    ? 'z-50 shadow-2xl shadow-yellow-400/40'
+                    : 'hover:-translate-y-4 hover:scale-110 hover:z-40'
                 }`}
               >
                 {/* Action Buttons Bubble above Selected Card */}
                 {isSelected && (
                   <div
-                    className="absolute -top-7 left-1/2 -translate-x-1/2 flex items-center space-x-1 bg-slate-950/95 border border-yellow-400 rounded-full px-2 py-0.5 shadow-2xl z-50 whitespace-nowrap animate-in fade-in zoom-in-90 duration-150"
+                    className="absolute -top-8 left-1/2 -translate-x-1/2 flex items-center space-x-1 bg-slate-950/95 border border-yellow-400 rounded-full px-2 py-0.5 shadow-2xl z-50 whitespace-nowrap animate-in fade-in zoom-in-90 duration-150"
                     onClick={(e) => e.stopPropagation()}
                   >
                     {/* Action 1: Summon / Play */}
@@ -91,7 +108,7 @@ export const HandTray: React.FC<Props> = ({
                         }}
                         className={`px-2.5 py-1 rounded-full text-[10px] font-black flex items-center space-x-1 shadow transition-all ${
                           isPlayableNow
-                            ? 'bg-gradient-to-r from-amber-500 to-yellow-400 hover:brightness-110 text-slate-950 ring-1 ring-yellow-200 animate-pulse active:scale-95'
+                            ? 'bg-gradient-to-r from-amber-500 to-yellow-400 hover:brightness-110 text-slate-950 ring-1 ring-yellow-200 animate-pulse active:scale-95 cursor-pointer'
                             : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
                         }`}
                       >
@@ -113,7 +130,7 @@ export const HandTray: React.FC<Props> = ({
                             onSelect('');
                           }
                         }}
-                        className="px-2.5 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-full text-[10px] font-black flex items-center space-x-1 shadow active:scale-95 ring-1 ring-blue-300"
+                        className="px-2.5 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-full text-[10px] font-black flex items-center space-x-1 shadow active:scale-95 ring-1 ring-blue-300 cursor-pointer"
                       >
                         <Zap size={10} className="fill-yellow-300 text-yellow-300" />
                         <span>アルカナへ</span>
@@ -128,7 +145,7 @@ export const HandTray: React.FC<Props> = ({
                         onInspect(cardData);
                       }}
                       title="詳細カード情報"
-                      className="p-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                      className="p-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
                     >
                       <Info size={11} />
                     </button>
@@ -140,7 +157,7 @@ export const HandTray: React.FC<Props> = ({
                         e.stopPropagation();
                         onSelect('');
                       }}
-                      className="p-1 rounded-full bg-slate-800 hover:bg-red-950 text-slate-400 hover:text-red-300 transition-colors"
+                      className="p-1 rounded-full bg-slate-800 hover:bg-red-950 text-slate-400 hover:text-red-300 transition-colors cursor-pointer"
                     >
                       <X size={11} />
                     </button>
@@ -167,3 +184,4 @@ export const HandTray: React.FC<Props> = ({
     </div>
   );
 };
+
