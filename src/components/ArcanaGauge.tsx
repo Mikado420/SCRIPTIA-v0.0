@@ -99,21 +99,54 @@ export const ArcanaGauge: React.FC<Props> = ({
     );
   }
 
-  // Giant Circular Arcana Gauge for Player (Bottom-Left)
+  // Unified Arcana Gauge for Player (Bottom-Left)
   return (
-    <div className="flex items-end space-x-2.5 pointer-events-auto select-none">
-      <div className="flex flex-col items-center">
-        {/* 5 Elemental Affinities Jewel Bar (Placed safely above the crystal sphere - NO OVERLAP) */}
-        <div className="flex items-center space-x-1 bg-black/60 backdrop-blur-sm px-2 py-0.5 rounded-full border border-white/15 mb-1 shadow-md">
+    <div className="flex items-center space-x-2 bg-slate-950/90 backdrop-blur-md px-2.5 py-1.5 rounded-2xl border border-cyan-500/40 shadow-2xl pointer-events-auto select-none">
+      {/* Unified Circular Crystal Arcana Sphere */}
+      <button
+        type="button"
+        onClick={onOpenArcana}
+        className="relative group cursor-pointer active:scale-95 transition-transform shrink-0"
+        title="アルカナゾーンを確認"
+      >
+        {/* Ambient Pulsing Aura */}
+        <div className="absolute -inset-1 rounded-full bg-cyan-500/30 blur group-hover:bg-cyan-400/50 transition-colors animate-pulse" />
+
+        {/* Outer Metallic Ring */}
+        <div className="relative w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-b from-slate-700 via-slate-900 to-black p-0.5 shadow-xl border-2 border-amber-400/80 flex items-center justify-center">
+          {/* Inner Glowing Crystal Sphere */}
+          <div className="w-full h-full rounded-full bg-gradient-to-br from-indigo-950 via-slate-950 to-blue-950 border border-cyan-400/50 flex flex-col items-center justify-center relative overflow-hidden shadow-inner">
+            <span className="text-[6.5px] sm:text-[7.5px] font-black text-cyan-300 tracking-wider leading-none">
+              ARCANA
+            </span>
+
+            {/* Crisp Counter */}
+            <div className="flex items-baseline justify-center font-mono font-black text-white leading-none my-0.5">
+              <span className="text-base sm:text-xl text-cyan-200 drop-shadow-[0_0_8px_rgba(56,189,248,0.9)]">
+                {current}
+              </span>
+              <span className="text-[10px] sm:text-xs text-cyan-400/70 mx-0.5">/</span>
+              <span className="text-[10px] sm:text-xs text-slate-400">
+                {max}
+              </span>
+            </div>
+          </div>
+        </div>
+      </button>
+
+      {/* Integrated Info Column: 5 Affinity Gems + Deck/Archive */}
+      <div className="flex flex-col space-y-1">
+        {/* 5 Elemental Affinity Gems (Illuminated in unified capsule) */}
+        <div className="flex items-center space-x-1 bg-black/50 px-1.5 py-0.5 rounded-full border border-white/10">
           {ELEMENTAL_SYSTEMS.map(sys => {
             const isActive = activeSystems.has(sys.id);
             return (
               <div
                 key={sys.id}
-                className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center text-[8px] font-black border transition-all duration-300 ${
+                className={`w-4 h-4 rounded-full flex items-center justify-center text-[7.5px] font-black border transition-all duration-200 ${
                   isActive
-                    ? `${sys.color} ${sys.glow} ${sys.activeBorder} shadow-lg scale-110`
-                    : 'bg-slate-900 border-slate-700/60 text-slate-600 opacity-40 grayscale'
+                    ? `${sys.color} ${sys.glow} ${sys.activeBorder} shadow-md scale-105`
+                    : 'bg-slate-900/90 border-slate-700/60 text-slate-600 opacity-40 grayscale'
                 }`}
                 title={`${sys.name}系統: ${isActive ? '解放済' : '未解放'}`}
               >
@@ -123,71 +156,26 @@ export const ArcanaGauge: React.FC<Props> = ({
           })}
         </div>
 
-        {/* Circular Crystal Arcana Sphere */}
-        <button
-          type="button"
-          onClick={onOpenArcana}
-          className="relative group cursor-pointer active:scale-95 transition-transform"
-          title="アルカナゾーンを確認"
-        >
-          {/* Ambient Pulsing Aura */}
-          <div className="absolute -inset-1 rounded-full bg-cyan-500/25 blur-md group-hover:bg-cyan-400/40 transition-colors animate-pulse" />
-
-          {/* Outer Metallic Ring */}
-          <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-b from-slate-700 via-slate-900 to-black p-1 shadow-2xl border-2 border-amber-400/70 flex items-center justify-center">
-            {/* Inner Glowing Crystal Sphere */}
-            <div className="w-full h-full rounded-full bg-gradient-to-br from-indigo-950 via-slate-950 to-blue-950 border border-cyan-400/40 flex flex-col items-center justify-center relative overflow-hidden shadow-inner">
-              {/* Subtle Mystic Grid Texture */}
-              <div className="absolute inset-0 bg-[radial-gradient(#38bdf8_1px,transparent_1px)] [background-size:6px_6px] opacity-25" />
-
-              {/* ARCANA Label */}
-              <span className="text-[7.5px] sm:text-[9px] font-black text-cyan-300 tracking-wider drop-shadow leading-none">
-                ARCANA
-              </span>
-
-              {/* Huge Crisp Counter */}
-              <div className="flex items-baseline justify-center font-mono font-black text-white leading-none my-0.5 sm:my-1">
-                <span className="text-2xl sm:text-3xl text-cyan-200 drop-shadow-[0_0_12px_rgba(56,189,248,0.9)]">
-                  {current}
-                </span>
-                <span className="text-xs sm:text-sm text-cyan-400/70 mx-0.5">/</span>
-                <span className="text-xs sm:text-sm text-slate-300">
-                  {max}
-                </span>
-              </div>
-
-              {/* Tap Hint */}
-              <span className="text-[6.5px] sm:text-[7.5px] font-bold text-slate-400/80 leading-none">
-                確認
-              </span>
-            </div>
+        {/* Deck & Archive Quick Counters */}
+        <div className="flex items-center space-x-1.5 text-[9px] font-bold">
+          <div
+            className="flex items-center space-x-1 bg-slate-900/90 border border-slate-700/80 px-1.5 py-0.5 rounded-md text-slate-300 shadow"
+            title="自分の山札残り枚数"
+          >
+            <Layers size={11} className="text-amber-400" />
+            <span className="font-mono font-bold text-white text-[11px]">{deckCount}</span>
           </div>
-        </button>
-      </div>
 
-      {/* Side HUD: Deck (山札) & Archive (墓地) */}
-      <div className="flex flex-col space-y-1 sm:space-y-1.5 pb-1">
-        {/* Deck Count */}
-        <div 
-          className="flex items-center space-x-1.5 bg-slate-950/85 backdrop-blur border border-slate-700 px-2 sm:px-2.5 py-1 rounded-xl shadow-md"
-          title="自分の山札残り枚数"
-        >
-          <Layers size={12} className="text-amber-400" />
-          <span className="text-[9px] sm:text-[10px] font-bold text-slate-300">山札</span>
-          <span className="font-mono font-black text-xs sm:text-sm text-white">{deckCount}</span>
+          <button
+            type="button"
+            onClick={onOpenArchive}
+            className="flex items-center space-x-1 bg-slate-900/90 hover:bg-slate-800 border border-purple-500/40 hover:border-purple-400 px-1.5 py-0.5 rounded-md text-purple-300 shadow cursor-pointer transition-colors"
+            title="自分のアーカイブ(墓地)を確認"
+          >
+            <Archive size={11} className="text-purple-400" />
+            <span className="font-mono font-bold text-purple-200 text-[11px]">{archiveCount}</span>
+          </button>
         </div>
-
-        {/* Archive / Graveyard Count */}
-        <button
-          type="button"
-          onClick={onOpenArchive}
-          className="flex items-center space-x-1.5 bg-slate-950/85 hover:bg-slate-900 backdrop-blur border border-purple-500/40 hover:border-purple-400 px-2 sm:px-2.5 py-1 rounded-xl shadow-md transition-colors cursor-pointer text-left"
-          title="自分のアーカイブ(墓地)を確認"
-        >
-          <Archive size={12} className="text-purple-400" />
-          <span className="text-[9px] sm:text-[10px] font-bold text-purple-300">墓地</span>
-          <span className="font-mono font-black text-xs sm:text-sm text-purple-200">{archiveCount}</span>
-        </button>
       </div>
     </div>
   );

@@ -263,7 +263,6 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
       const attacker = p.field.find(u => u.instanceId === action.attackerId);
       if (!attacker || attacker.isRested || attacker.hasSummoningSickness) return newState;
       
-      attacker.isRested = true;
       const aTpl = getCard(attacker.cards[0].cardId);
 
       // On Attack triggers
@@ -274,12 +273,31 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
       }
       
       if (action.targetId) {
+         // Opponent Unit attack validation
+         const targetUnit = opp.field.find(u => u.instanceId === action.targetId);
+         if (!targetUnit) return newState;
+         const canAttackActive = aTpl.id === 'BR-09' || aTpl.keywords?.includes('CanAttackActive');
+         if (!targetUnit.isRested && !canAttackActive) {
+           newState.log.push(`【${aTpl.name}】はアクティブ状態の相手ユニットを攻撃できない！`);
+           return newState;
+         }
+         attacker.isRested = true;
          return resolveCombat(newState, action.attackerId, action.targetId);
       } else {
-         if (aTpl.keywords?.includes('CannotAttackPlayer')) return newState;
+         // Opponent Player attack validation
+         if (aTpl.keywords?.includes('CannotAttackPlayer')) {
+           newState.log.push(`【${aTpl.name}】は相手プレイヤーを攻撃できない！`);
+           return newState;
+         }
+         attacker.isRested = true;
          const canGuard = opp.field.some(u => !u.isRested && getCard(u.cards[0].cardId).keywords?.includes('Guard'));
          if (canGuard && !aTpl.keywords?.includes('CannotBeGuarded')) {
-            newState.prompt = { type: 'GUARD', playerId: oppKey, attackerId: action.attackerId };
+            newState.prompt = {
+              type: 'GUARD',
+              playerId: oppKey,
+              attackerId: action.attackerId,
+              text: `${p.id} が直接攻撃を宣言！守護を発動しますか？`
+            };
             newState.log.push(`${p.id} は直接攻撃を宣言！守護を待機中...`);
             return newState;
          } else {
@@ -292,29 +310,44 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
     case 'RESOLVE_GUARD': {
       if (newState.prompt?.type !== 'GUARD') return newState;
       const attackerId = newState.prompt.attackerId!;
+      const defenderPlayerKey = newState.prompt.playerId as 'player1' | 'player2';
+      const defPlayer = newState[defenderPlayerKey];
       newState.prompt = null;
       
       if (action.guarderId) {
-        const guarder = opp.field.find(u => u.instanceId === action.guarderId);
-        if (guarder) {
+        const guarder = defPlayer.field.find(u => u.instanceId === action.guarderId);
+        // Strict guard validation: unit must exist, must NOT be rested, must have Guard keyword!
+        if (guarder && !guarder.isRested && getCard(guarder.cards[0].cardId).keywords?.includes('Guard')) {
           guarder.isRested = true;
-          newState.log.push(`${oppKey} が守護を発動！`);
+          const gTpl = getCard(guarder.cards[0].cardId);
+          newState.log.push(`【${gTpl.name}】が守護を発動！攻撃を自身に引き付けた。(レスト状態になった)`);
+
           // BW-15 Domain Check
-          if (opp.domain?.cardId === 'BW-15' && !newState.flags.domain15Used) {
-            if (opp.deck.length > 0) {
-               opp.hand.push(opp.deck.pop()!);
+          if (defPlayer.domain?.cardId === 'BW-15' && !newState.flags.domain15Used) {
+            if (defPlayer.deck.length > 0) {
+               defPlayer.hand.push(defPlayer.deck.pop()!);
                newState.log.push(`【加護の聖域】の効果でカードを1枚引いた。`);
                newState.flags.domain15Used = true;
             }
           }
-          return resolveCombat(newState, attackerId, action.guarderId);
+
+          newState = resolveCombat(newState, attackerId, action.guarderId);
+
+          // BD-02 Mary self-destruct check if still on board
+          const stillAlive = defPlayer.field.find(u => u.instanceId === action.guarderId);
+          if (stillAlive && gTpl.id === 'BD-02') {
+            newState.log.push(`【未練の霊 マリー】は守護を行ったため破壊された。`);
+            newState = destroyUnit(newState, action.guarderId);
+          }
+
+          return newState;
         }
       }
       
       const aData = findUnitAndOwner(newState, attackerId);
       if (!aData) return newState;
       const stats = calculateUnitStats(newState, aData.playerId, aData.unit);
-      return checkWinCondition(newState, oppKey, stats.brk);
+      return checkWinCondition(newState, defenderPlayerKey, stats.brk);
     }
 
     case 'RESOLVE_TRIGGER': {

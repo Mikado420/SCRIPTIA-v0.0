@@ -71,7 +71,7 @@ export const CardView: React.FC<CardViewProps> = ({
   // Size dimensions map
   const sizeClasses = {
     'opponent-hand': 'w-[34px] h-[48px] sm:w-[42px] sm:h-[58px] rounded-sm',
-    'field': 'w-[54px] h-[74px] sm:w-[62px] sm:h-[84px] md:w-[68px] md:h-[92px] rounded-md sm:rounded-lg',
+    'field': 'w-[64px] h-[86px] rounded-lg',
     'hand': 'w-[64px] h-[92px] sm:w-[72px] sm:h-[104px] md:w-[78px] md:h-[112px] rounded-lg sm:rounded-xl',
     'compact': 'w-[40px] h-[30px] sm:w-[48px] sm:h-[36px] rounded-sm',
     'default': 'w-24 h-34 sm:w-28 sm:h-40 rounded-md',
@@ -127,7 +127,7 @@ export const CardView: React.FC<CardViewProps> = ({
         className={`relative ${sizeClasses} bg-gradient-to-b ${sysColor} border-2 flex flex-col justify-between select-none overflow-hidden shrink-0 transition-all duration-200 shadow-lg
           ${selected ? 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-black scale-105 z-30 shadow-yellow-500/50' : ''}
           ${playable ? 'cursor-pointer hover:border-yellow-300' : ''}
-          ${isRested ? 'rotate-90 scale-[0.84] origin-center opacity-85 shadow-md' : ''}
+          ${isRested ? 'rotate-90 scale-[0.74] origin-center opacity-85 shadow-md' : ''}
           ${className}
         `}
       >

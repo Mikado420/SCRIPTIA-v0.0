@@ -17,15 +17,32 @@ export const resolveCombat = (state: GameState, attackerId: string, defenderId: 
 
   state.log.push(`◆ 戦闘：【${aTpl.name}】(ATK ${aStats.atk}) vs 【${dTpl.name}】(DEF ${dStats.def})`);
 
+  // Unit vs Unit combat resolution
   let aDestroyed = false;
   let dDestroyed = false;
 
-  if (aStats.atk > dStats.def) dDestroyed = true;
-  else if (aStats.atk === dStats.def) { aDestroyed = true; dDestroyed = true; }
-  else { aDestroyed = true; }
+  if (aStats.atk > dStats.def) {
+    dDestroyed = true;
+    state.log.push(`◆ 戦闘結果：【${aTpl.name}】が【${dTpl.name}】を突破・撃破！`);
+  } else if (aStats.atk === dStats.def) {
+    aDestroyed = true;
+    dDestroyed = true;
+    state.log.push(`◆ 相打ち！【${aTpl.name}】と【${dTpl.name}】の両方が破壊された。`);
+  } else {
+    // ATK < DEF: Attacker destroyed (self-destruct), Defender untouched
+    aDestroyed = true;
+    state.log.push(`◆ 反撃！【${dTpl.name}】のDEFが高く、【${aTpl.name}】は自爆・破壊された。`);
+  }
 
-  if (aTpl.keywords?.includes('Lethal')) dDestroyed = true;
-  if (dTpl.keywords?.includes('Lethal')) aDestroyed = true;
+  // Lethal keyword triggers
+  if (aTpl.keywords?.includes('Lethal') && !dDestroyed) {
+    dDestroyed = true;
+    state.log.push(`【${aTpl.name}】の【必殺】が発動！【${dTpl.name}】を破壊！`);
+  }
+  if (dTpl.keywords?.includes('Lethal') && !aDestroyed) {
+    aDestroyed = true;
+    state.log.push(`【${dTpl.name}】の【必殺】が発動！【${aTpl.name}】を破壊！`);
+  }
 
   if (dDestroyed) {
     state = destroyUnit(state, defenderId);
@@ -43,10 +60,13 @@ export const resolveCombat = (state: GameState, attackerId: string, defenderId: 
     state = destroyUnit(state, attackerId);
   }
 
-  // BD-02 Mary self-destruct after guarding
-  if (dTpl.id === 'BD-02' && !dDestroyed) {
-    state.log.push(`【未練の霊 マリー】は守護を行ったため破壊される。`);
-    state = destroyUnit(state, defenderId);
+  // BD-02 Mary self-destruct after guarding / defending
+  if (dTpl.id === 'BD-02') {
+    const stillDef = state[dPid].field.find(u => u.instanceId === defenderId);
+    if (stillDef) {
+      state.log.push(`【未練の霊 マリー】は守護を行ったため破壊される。`);
+      state = destroyUnit(state, defenderId);
+    }
   }
 
   return state;

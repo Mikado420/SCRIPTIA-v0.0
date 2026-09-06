@@ -2,7 +2,7 @@ export type System = 'Fire' | 'Water' | 'Earth' | 'Light' | 'Dark' | 'Neutral';
 export type CardType = 'Unit' | 'Spell' | 'Rune' | 'Domain' | 'Evolution';
 export type Lineage = 'Rampage' | 'Mechanoid' | 'Dragon' | 'Merfolk' | 'Aquatica' | 'Leviathan' | 'Bestia' | 'Insect' | 'Titan' | 'Guardian' | 'Oracle' | 'Angel' | 'Parasite' | 'Ghost' | 'Demon' | 'Neutral' | 'None';
 
-export type Keyword = 'Guard' | 'Rush' | 'Lethal' | 'CannotAttackPlayer' | 'CannotBeGuarded';
+export type Keyword = 'Guard' | 'Rush' | 'Lethal' | 'CannotAttackPlayer' | 'CannotBeGuarded' | 'CanAttackActive';
 
 export interface CardTemplate {
   id: string;
@@ -65,6 +65,7 @@ export interface PromptState {
   sourceId?: string;
   targetId?: string;
   message?: string;
+  text?: string;
   validTargets?: string[];
 }
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GameState, GameAction, CardInstance, CardTemplate } from '../types';
+import { GameState, GameAction, CardInstance, CardTemplate, UnitState } from '../types';
 import { CardView } from './CardView';
 import { HandTray } from './HandTray';
 import { ArcanaGauge } from './ArcanaGauge';
@@ -226,27 +226,46 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
         const selHand = me.hand.find(c => c.instanceId === selectedCardId);
         if (selHand) {
           const spellTpl = getCard(selHand.cardId);
-          if (spellTpl.type === 'Spell') triggerCutin(spellTpl, '呪文詠唱！');
-          dispatch({ type: 'PLAY_CARD', instanceId: selectedCardId, targetId: id });
+          // Spell target validation
+          if (isTargetValidForSelected('unit', inOppField)) {
+            if (spellTpl.type === 'Spell') triggerCutin(spellTpl, '呪文詠唱！');
+            dispatch({ type: 'PLAY_CARD', instanceId: selectedCardId, targetId: id });
+            setSelectedCardId(null);
+          }
+          return;
         } else {
-          // Friendly unit attacking opponent unit: Animate attack dash & impact!
-          performAttackAnimation(selectedCardId, id);
+          // Friendly unit attacking opponent unit
+          const attacker = me.field.find(u => u.instanceId === selectedCardId);
+          if (attacker && !attacker.isRested && !attacker.hasSummoningSickness) {
+            const aTpl = getCard(attacker.cards[0].cardId);
+            const canAttackActive = aTpl.id === 'BR-09' || aTpl.keywords?.includes('CanAttackActive');
+            if (inOppField.isRested || canAttackActive) {
+              performAttackAnimation(selectedCardId, id);
+              setSelectedCardId(null);
+            }
+            return;
+          }
         }
-        setSelectedCardId(null);
         return;
       }
 
       // Opponent Domain or Rune target
       const oppRune = opp.runes.find(c => c.instanceId === id);
       if (oppRune && selectedCardId) {
-        dispatch({ type: 'PLAY_CARD', instanceId: selectedCardId, targetId: id });
-        setSelectedCardId(null);
+        const selHand = me.hand.find(c => c.instanceId === selectedCardId);
+        if (selHand && getCard(selHand.cardId).id === 'BN-04') {
+          dispatch({ type: 'PLAY_CARD', instanceId: selectedCardId, targetId: id });
+          setSelectedCardId(null);
+        }
         return;
       }
 
       if (opp.domain?.instanceId === id && selectedCardId) {
-        dispatch({ type: 'PLAY_CARD', instanceId: selectedCardId, targetId: id });
-        setSelectedCardId(null);
+        const selHand = me.hand.find(c => c.instanceId === selectedCardId);
+        if (selHand && getCard(selHand.cardId).id === 'BN-03') {
+          dispatch({ type: 'PLAY_CARD', instanceId: selectedCardId, targetId: id });
+          setSelectedCardId(null);
+        }
         return;
       }
     }
@@ -271,10 +290,13 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
   const handleOpponentDirectAttack = (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (isMyTurn && state.phase === 'ACTION' && selectedCardId) {
-      const selHand = me.hand.find(c => c.instanceId === selectedCardId);
-      if (!selHand) {
-        performAttackAnimation(selectedCardId);
-        setSelectedCardId(null);
+      const attacker = me.field.find(u => u.instanceId === selectedCardId);
+      if (attacker && !attacker.isRested && !attacker.hasSummoningSickness) {
+        const aTpl = getCard(attacker.cards[0].cardId);
+        if (!aTpl.keywords?.includes('CannotAttackPlayer')) {
+          performAttackAnimation(selectedCardId);
+          setSelectedCardId(null);
+        }
       }
     }
   };
@@ -284,17 +306,50 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
     const cardInst = me.hand.find(c => c.instanceId === instanceId);
     if (cardInst) {
       const tpl = getCard(cardInst.cardId);
-      if (tpl.type === 'Unit') {
+      if (tpl.type === 'Spell') {
+        // Targeted spells require user to tap target
+        if (tpl.targetReq) {
+          if (tpl.id === 'BW-13') {
+            // Sacred prayer (Archive target)
+            setZoneModal({
+              isOpen: true,
+              title: 'アーカイブから回収するユニットを選択',
+              zoneType: 'archive',
+              cards: me.archive,
+              isOpponent: false,
+              selectionMode: {
+                promptText: '手札に加えるユニットを選択',
+                canSelect: (cTpl) => cTpl.type === 'Unit',
+                onSelect: (chosenId) => {
+                  triggerCutin(tpl, '呪文詠唱！');
+                  dispatch({ type: 'PLAY_CARD', instanceId, targetId: chosenId });
+                  setSelectedCardId(null);
+                },
+              },
+            });
+            return;
+          }
+          // Unit/Domain/Rune targeted spells: set selection for target picking
+          setSelectedCardId(instanceId);
+          return;
+        } else {
+          // Instant non-targeted spells (BR-13, BB-13, BG-12, BD-12)
+          triggerCutin(tpl, '呪文詠唱！');
+          dispatch({ type: 'PLAY_CARD', instanceId });
+          setSelectedCardId(null);
+          return;
+        }
+      } else if (tpl.type === 'Evolution') {
+        // Evolution requires selecting base unit
+        setSelectedCardId(instanceId);
+        return;
+      } else if (tpl.type === 'Unit') {
         // Trigger summon ripple in the new slot
         setSummonRippleSlot({ isOpponent: false, slotIdx: me.field.length });
         setTimeout(() => setSummonRippleSlot(null), 850);
         if (tpl.effectText && (tpl.keywords?.includes('Rush') || tpl.effectText.includes('登場時'))) {
           triggerCutin(tpl, '登場時効果発動！');
         }
-      } else if (tpl.type === 'Spell') {
-        triggerCutin(tpl, '呪文詠唱！');
-      } else if (tpl.type === 'Evolution') {
-        triggerCutin(tpl, '進化召喚！');
       }
     }
     dispatch({ type: 'PLAY_CARD', instanceId });
@@ -327,12 +382,47 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
     dispatch({ type: 'RESOLVE_TRIGGER', apply, targetId });
   };
 
+  // Helper to test if a target is valid for currently selected card
+  const isTargetValidForSelected = (targetType: 'unit' | 'domain' | 'rune', targetUnit?: UnitState): boolean => {
+    if (!selectedCardId) return false;
+    const selHand = me.hand.find(c => c.instanceId === selectedCardId);
+    if (selHand) {
+      const tpl = getCard(selHand.cardId);
+      if (targetType === 'unit' && targetUnit) {
+        const stats = calculateUnitStats(state, 'player2', targetUnit);
+        if (tpl.id === 'BR-12') return stats.def <= 20;
+        if (tpl.id === 'BB-12') return getCard(targetUnit.cards[0].cardId).cost <= 5;
+        if (tpl.id === 'BG-13') return stats.def <= 60;
+        if (tpl.id === 'BW-12' || tpl.id === 'BD-13') return true;
+        if (tpl.id === 'BR-08') return stats.def <= 40;
+        if (tpl.id === 'BD-11') return stats.def <= 80;
+        if (tpl.id === 'BB-09' || tpl.id === 'BW-05') return true;
+      }
+      if (targetType === 'domain' && tpl.id === 'BN-03') return true;
+      if (targetType === 'rune' && tpl.id === 'BN-04') return true;
+    } else {
+      // Attacker selected
+      const attacker = me.field.find(u => u.instanceId === selectedCardId);
+      if (attacker && targetType === 'unit' && targetUnit) {
+        const aTpl = getCard(attacker.cards[0].cardId);
+        const canAttackActive = aTpl.id === 'BR-09' || aTpl.keywords?.includes('CanAttackActive');
+        return targetUnit.isRested || canAttackActive;
+      }
+    }
+    return false;
+  };
+
   // Check if player has selected an active attacker ready for direct attack
   const canDirectAttack =
     isMyTurn &&
     state.phase === 'ACTION' &&
     !!selectedCardId &&
-    me.field.some(u => u.instanceId === selectedCardId && !u.isRested && !u.hasSummoningSickness);
+    me.field.some(u => {
+      if (u.instanceId !== selectedCardId) return false;
+      if (u.isRested || u.hasSummoningSickness) return false;
+      const tpl = getCard(u.cards[0].cardId);
+      return !tpl.keywords?.includes('CannotAttackPlayer');
+    });
 
   // Check if a summonable unit is selected in hand (to highlight empty field slots)
   const selectedHandCard = selectedCardId ? me.hand.find(c => c.instanceId === selectedCardId) : null;
@@ -487,28 +577,42 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
       </div>
 
       {/* ========================================================================= */}
-      {/* 2. CENTER BATTLE ZONE: Expansive Dual 6-Slot Arena Grid                   */}
+      {/* 2. CENTER BATTLE ZONE: Expansive Dual 6-Slot Arena Grid (h-[210px])       */}
       {/* ========================================================================= */}
-      <div className="relative flex-1 w-full max-w-5xl mx-auto flex flex-col justify-center items-center px-1 sm:px-2 py-1 z-10 pointer-events-auto min-h-0 min-w-0">
-        {/* Opponent Field (6 Creature Slots - 1 SLOT = 1 UNIT GUARANTEED) */}
-        <div className="w-full flex items-center justify-center space-x-2 sm:space-x-3 md:space-x-4 min-h-0">
+      <div className="relative h-[210px] w-full max-w-5xl mx-auto flex flex-col justify-center items-center px-1 sm:px-2 z-10 pointer-events-auto shrink-0 min-h-0 min-w-0">
+        {/* Floating Targeting Guide Banner */}
+        {selectedCardId && me.hand.some(c => c.instanceId === selectedCardId && getCard(c.cardId).type === 'Spell' && getCard(c.cardId).targetReq) && (
+          <div className="absolute -top-1.5 z-30 bg-indigo-950/95 border border-cyan-400 px-3 py-0.5 rounded-full shadow-xl text-[10px] font-bold text-cyan-200 flex items-center space-x-1.5 animate-pulse">
+            <Zap size={11} className="text-yellow-300" />
+            <span>【{getCard(me.hand.find(c => c.instanceId === selectedCardId)!.cardId).name}】の対象を選択してください</span>
+          </div>
+        )}
+        {selectedCardId && me.field.some(u => u.instanceId === selectedCardId) && (
+          <div className="absolute -top-1.5 z-30 bg-red-950/95 border border-red-400 px-3 py-0.5 rounded-full shadow-xl text-[10px] font-bold text-red-200 flex items-center space-x-1.5 animate-pulse">
+            <Sword size={11} className="text-yellow-300" />
+            <span>攻撃対象（レスト状態の相手ユニット または 相手プレイヤー）を選択</span>
+          </div>
+        )}
+
+        {/* Opponent Field (6 Creature Slots - 1 SLOT = 1 UNIT GUARANTEED, w-[64px] h-[86px]) */}
+        <div className="w-full flex items-center justify-center space-x-2 sm:space-x-3 min-h-0">
           {Array.from({ length: 6 }).map((_, slotIdx) => {
             const unit = opp.field[slotIdx];
             const stats = unit ? calculateUnitStats(state, 'player2', unit) : null;
-            const isTarget = unit && selectedCardId && !me.hand.some(c => c.instanceId === selectedCardId);
+            const isTarget = unit ? isTargetValidForSelected('unit', unit) : false;
             const isAttacking = unit && activeAttackerId === unit.instanceId;
             const hasRipple = summonRippleSlot?.isOpponent && summonRippleSlot.slotIdx === slotIdx;
 
             return (
               <div
                 key={unit ? unit.instanceId : `opp-slot-${slotIdx}`}
-                className={`relative w-[58px] h-[80px] sm:w-[68px] sm:h-[94px] md:w-[76px] md:h-[104px] rounded-lg flex items-center justify-center transition-all min-h-0 shrink-0 ${
+                className={`relative w-[64px] h-[86px] rounded-lg flex items-center justify-center transition-all min-h-0 shrink-0 overflow-hidden ${
                   unit
-                    ? 'overflow-visible'
-                    : 'border-2 border-dashed border-white/10 bg-black/20'
+                    ? ''
+                    : 'border-2 border-dashed border-white/15 bg-black/25'
                 } ${
                   isTarget
-                    ? 'ring-2 ring-red-500 shadow-lg shadow-red-500/60 cursor-pointer animate-pulse'
+                    ? 'ring-2 ring-red-400 shadow-lg shadow-red-500/70 cursor-pointer animate-pulse scale-[1.02]'
                     : ''
                 } ${isAttacking ? 'animate-attack-dash z-40' : ''}`}
                 onClick={(e) => unit && handleCardClick(unit.instanceId, e)}
@@ -538,20 +642,20 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
           })}
         </div>
 
-        {/* Generous Arena Dividing Crest Line (Wide vertical breathing room) */}
-        <div className="w-full max-w-3xl flex items-center justify-center my-2 sm:my-3 md:my-4 opacity-70">
+        {/* Generous Arena Dividing Crest Line (Breathing room) */}
+        <div className="w-full max-w-2xl flex items-center justify-center my-1 opacity-70">
           <div className="flex-1 h-px bg-gradient-to-r from-transparent via-amber-400/50 to-transparent" />
           <div className="mx-3 px-2.5 py-0.5 rounded-full border border-amber-400/50 bg-black/70 flex items-center space-x-1.5 shadow-lg">
             <Sword size={10} className="text-amber-400" />
-            <span className="text-[8px] sm:text-[9px] font-black tracking-widest text-amber-300 uppercase">
+            <span className="text-[7.5px] sm:text-[8.5px] font-black tracking-widest text-amber-300 uppercase">
               BATTLE ARENA
             </span>
           </div>
           <div className="flex-1 h-px bg-gradient-to-r from-transparent via-amber-400/50 to-transparent" />
         </div>
 
-        {/* Player Field (6 Creature Slots - 1 SLOT = 1 UNIT GUARANTEED) */}
-        <div className="w-full flex items-center justify-center space-x-2 sm:space-x-3 md:space-x-4 min-h-0">
+        {/* Player Field (6 Creature Slots - 1 SLOT = 1 UNIT GUARANTEED, w-[64px] h-[86px]) */}
+        <div className="w-full flex items-center justify-center space-x-2 sm:space-x-3 min-h-0">
           {Array.from({ length: 6 }).map((_, slotIdx) => {
             const unit = me.field[slotIdx];
             const stats = unit ? calculateUnitStats(state, 'player1', unit) : null;
@@ -572,12 +676,12 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
                     handlePlayHandCard(selectedHandCard.instanceId);
                   }
                 }}
-                className={`relative w-[58px] h-[80px] sm:w-[68px] sm:h-[94px] md:w-[76px] md:h-[104px] rounded-lg flex items-center justify-center transition-all min-h-0 shrink-0 ${
+                className={`relative w-[64px] h-[86px] rounded-lg flex items-center justify-center transition-all min-h-0 shrink-0 overflow-hidden ${
                   unit
-                    ? 'overflow-visible'
+                    ? ''
                     : isSelectedHandPlayable
                       ? 'border-2 border-dashed border-emerald-400/90 bg-emerald-950/40 cursor-pointer shadow-lg shadow-emerald-500/40 animate-pulse hover:bg-emerald-900/50'
-                      : 'border-2 border-dashed border-white/10 bg-black/20'
+                      : 'border-2 border-dashed border-white/15 bg-black/25'
                 } ${isAttacking ? 'animate-attack-dash z-40' : ''}`}
               >
                 {/* Summon Wave Ripple Effect */}
@@ -611,46 +715,16 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
       </div>
 
       {/* ========================================================================= */}
-      {/* 3. BOTTOM TIER: Player HUD, Hand Tray, Arcana Gauge & Action Controls     */}
+      {/* 3. BOTTOM TIER: Player HUD, Hand Tray, Arcana Gauge & Controls (h-[130px]) */}
       {/* ========================================================================= */}
-      <div className="relative w-full flex items-end justify-between z-30 pointer-events-none shrink-0 min-h-0 pb-0.5">
-        {/* Bottom-Left: Circular Arcana Gauge + Deck & Archive */}
-        <div className="pointer-events-auto">
-          <ArcanaGauge
-            current={me.currentArcana}
-            max={me.maxArcana}
-            arcanaCards={me.arcana}
-            deckCount={me.deck.length}
-            archiveCount={me.archive.length}
-            onOpenArcana={() =>
-              setZoneModal({
-                isOpen: true,
-                title: '自分のアルカナゾーン',
-                zoneType: 'arcana',
-                cards: me.arcana,
-                isOpponent: false,
-              })
-            }
-            onOpenArchive={() =>
-              setZoneModal({
-                isOpen: true,
-                title: '自分のアーカイブ(墓地)',
-                zoneType: 'archive',
-                cards: me.archive,
-                isOpponent: false,
-              })
-            }
-          />
-        </div>
-
-        {/* Bottom-Center: Strictly mathematically centered at X=50% */}
-        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-none z-30 w-full max-w-2xl px-2">
-          {/* Floating Player Barrier & Rune/Domain Bar (Directly above Hand Tray) */}
-          <div className="flex items-center space-x-1.5 sm:space-x-2 bg-black/65 backdrop-blur-md px-2.5 py-0.5 sm:py-1 rounded-2xl border border-white/10 shadow-lg pointer-events-auto mb-1">
+      <div className="h-[130px] w-full flex flex-col justify-between shrink-0 px-2 min-h-0 z-30 pb-0.5">
+        {/* Top Row of Bottom Tier: Centered Player Barrier & Rune/Domain Bar (Cleanly BELOW field, ABOVE hand) */}
+        <div className="w-full flex items-center justify-center pointer-events-auto">
+          <div className="flex items-center space-x-1.5 sm:space-x-2 bg-black/75 backdrop-blur-md px-2.5 py-0.5 rounded-2xl border border-white/10 shadow-lg">
             {/* 5 Cyan Barrier Plates */}
             <BarrierPlates count={me.barrier} max={5} isOpponent={false} />
 
-            <div className="h-5 w-px bg-white/15 mx-0.5" />
+            <div className="h-4 w-px bg-white/15 mx-0.5" />
 
             {/* Player Runes (2 Sockets) */}
             <div className="flex items-center space-x-1">
@@ -658,16 +732,16 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
               {me.runes[0] ? (
                 <CardView isFaceDown size="compact" onClick={(e) => handleCardClick(me.runes[0].instanceId, e)} />
               ) : (
-                <div className="w-[34px] h-[26px] sm:w-[38px] sm:h-[30px] border border-dashed border-white/15 rounded flex items-center justify-center text-[7px] text-white/20">空</div>
+                <div className="w-[32px] h-[24px] sm:w-[36px] sm:h-[28px] border border-dashed border-white/15 rounded flex items-center justify-center text-[7px] text-white/20">空</div>
               )}
               {me.runes[1] ? (
                 <CardView isFaceDown size="compact" onClick={(e) => handleCardClick(me.runes[1].instanceId, e)} />
               ) : (
-                <div className="w-[34px] h-[26px] sm:w-[38px] sm:h-[30px] border border-dashed border-white/15 rounded flex items-center justify-center text-[7px] text-white/20">空</div>
+                <div className="w-[32px] h-[24px] sm:w-[36px] sm:h-[28px] border border-dashed border-white/15 rounded flex items-center justify-center text-[7px] text-white/20">空</div>
               )}
             </div>
 
-            <div className="h-5 w-px bg-white/15 mx-0.5" />
+            <div className="h-4 w-px bg-white/15 mx-0.5" />
 
             {/* Player Domain */}
             <div className="flex items-center space-x-1">
@@ -675,13 +749,45 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
               {me.domain ? (
                 <CardView instance={me.domain} size="compact" onInspect={() => onInspect(getCard(me.domain!.cardId))} />
               ) : (
-                <div className="w-[34px] h-[26px] sm:w-[38px] sm:h-[30px] border border-dashed border-white/15 rounded flex items-center justify-center text-[7px] text-white/20">無</div>
+                <div className="w-[32px] h-[24px] sm:w-[36px] sm:h-[28px] border border-dashed border-white/15 rounded flex items-center justify-center text-[7px] text-white/20">無</div>
               )}
             </div>
           </div>
+        </div>
 
-          {/* Interactive Player Hand Tray (Always Centered) */}
-          <div className="w-full flex justify-center pointer-events-auto">
+        {/* Bottom Row of Bottom Tier: Arcana Gauge (Left), Hand Tray (Center), Action Controls (Right) */}
+        <div className="w-full flex items-end justify-between relative min-h-0">
+          {/* Bottom-Left: Circular Arcana Gauge + Deck & Archive */}
+          <div className="pointer-events-auto shrink-0">
+            <ArcanaGauge
+              current={me.currentArcana}
+              max={me.maxArcana}
+              arcanaCards={me.arcana}
+              deckCount={me.deck.length}
+              archiveCount={me.archive.length}
+              onOpenArcana={() =>
+                setZoneModal({
+                  isOpen: true,
+                  title: '自分のアルカナゾーン',
+                  zoneType: 'arcana',
+                  cards: me.arcana,
+                  isOpponent: false,
+                })
+              }
+              onOpenArchive={() =>
+                setZoneModal({
+                  isOpen: true,
+                  title: '自分のアーカイブ(墓地)',
+                  zoneType: 'archive',
+                  cards: me.archive,
+                  isOpponent: false,
+                })
+              }
+            />
+          </div>
+
+          {/* Bottom-Center: Interactive Player Hand Tray */}
+          <div className="flex-1 max-w-xl mx-2 flex justify-center pointer-events-auto min-h-0">
             <HandTray
               hand={me.hand}
               state={state}
@@ -693,27 +799,27 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
               onArcanaPlace={handlePlaceHandArcana}
             />
           </div>
-        </div>
 
-        {/* Bottom-Right: 3D Turn End Button & Arcana Charge */}
-        <div className="pointer-events-auto">
-          <ActionControls
-            phase={state.phase}
-            turnCount={state.turnCount}
-            isMyTurn={isMyTurn}
-            hasPlacedArcanaThisTurn={state.flags.hasPlacedArcanaThisTurn}
-            hasPrompt={!!state.prompt}
-            selectedCardId={selectedCardId}
-            isHandSelected={!!selectedCardId && me.hand.some(c => c.instanceId === selectedCardId)}
-            onNextPhase={() => {
-              dispatch({ type: 'NEXT_PHASE' });
-              setArcanaMode(false);
-              setSelectedCardId(null);
-            }}
-            onArcanaCharge={handleArcanaChargeBtn}
-            onToggleLog={() => setShowLog(!showLog)}
-            onOpenPlaymat={() => setShowPlaymatSelector(true)}
-          />
+          {/* Bottom-Right: 3D Turn End Button & Arcana Charge */}
+          <div className="pointer-events-auto shrink-0">
+            <ActionControls
+              phase={state.phase}
+              turnCount={state.turnCount}
+              isMyTurn={isMyTurn}
+              hasPlacedArcanaThisTurn={state.flags.hasPlacedArcanaThisTurn}
+              hasPrompt={!!state.prompt}
+              selectedCardId={selectedCardId}
+              isHandSelected={!!selectedCardId && me.hand.some(c => c.instanceId === selectedCardId)}
+              onNextPhase={() => {
+                dispatch({ type: 'NEXT_PHASE' });
+                setArcanaMode(false);
+                setSelectedCardId(null);
+              }}
+              onArcanaCharge={handleArcanaChargeBtn}
+              onToggleLog={() => setShowLog(!showLog)}
+              onOpenPlaymat={() => setShowPlaymatSelector(true)}
+            />
+          </div>
         </div>
       </div>
 
