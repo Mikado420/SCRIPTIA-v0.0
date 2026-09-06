@@ -1,7 +1,7 @@
 import React from 'react';
 import { CardInstance, CardTemplate } from '../types';
 import { getCard } from '../data/cards';
-import { Info } from 'lucide-react';
+import { Info, Shield, Moon, Sword } from 'lucide-react';
 
 export type CardViewSize = 'field' | 'hand' | 'opponent-hand' | 'compact' | 'default';
 
@@ -70,9 +70,9 @@ export const CardView: React.FC<CardViewProps> = ({
 
   // Size dimensions map
   const sizeClasses = {
-    'opponent-hand': 'w-[44px] h-[60px] rounded-sm',
-    'field': 'w-[62px] h-[88px] rounded-md',
-    'hand': 'w-[74px] h-[106px] rounded-md',
+    'opponent-hand': 'w-[42px] h-[58px] rounded-sm',
+    'field': 'w-[68px] h-[92px] rounded-lg',
+    'hand': 'w-[78px] h-[112px] rounded-xl',
     'compact': 'w-[50px] h-[72px] rounded-sm',
     'default': 'w-28 h-40 rounded-md',
   }[size];
@@ -94,12 +94,12 @@ export const CardView: React.FC<CardViewProps> = ({
   }
 
   const sysColor = {
-    Fire: 'from-red-950 to-red-900 border-red-500/70 text-red-100',
-    Water: 'from-blue-950 to-blue-900 border-blue-500/70 text-blue-100',
-    Earth: 'from-emerald-950 to-emerald-900 border-emerald-500/70 text-emerald-100',
-    Light: 'from-amber-950/90 to-yellow-900/90 border-amber-400/80 text-amber-100',
-    Dark: 'from-purple-950 to-slate-950 border-purple-500/70 text-purple-200',
-    Neutral: 'from-slate-800 to-slate-900 border-slate-400/60 text-slate-100',
+    Fire: 'from-red-950 via-slate-900 to-red-950 border-red-500/80 text-red-100',
+    Water: 'from-blue-950 via-slate-900 to-blue-950 border-blue-500/80 text-blue-100',
+    Earth: 'from-emerald-950 via-slate-900 to-emerald-950 border-emerald-500/80 text-emerald-100',
+    Light: 'from-amber-950 via-slate-900 to-yellow-950 border-amber-400/80 text-amber-100',
+    Dark: 'from-purple-950 via-slate-900 to-slate-950 border-purple-500/80 text-purple-200',
+    Neutral: 'from-slate-800 via-slate-900 to-slate-800 border-slate-400/60 text-slate-100',
   }[card.system];
 
   const badgeColor = {
@@ -116,59 +116,79 @@ export const CardView: React.FC<CardViewProps> = ({
   const displayBrk = computedStats ? computedStats.brk : card.brk;
 
   const isUnit = card.type === 'Unit' || card.type === 'Evolution';
+  const hasGuard = card.keywords?.includes('Guard');
 
-  // 1. FIELD CARD DISPLAY
+  // 1. FIELD CARD DISPLAY (Duel Masters Plays Creature Plate)
   if (size === 'field') {
     return (
       <div
         onClick={onClick}
         onContextMenu={onContextMenu}
-        className={`relative ${sizeClasses} bg-gradient-to-b ${sysColor} border-2 flex flex-col justify-between select-none overflow-hidden shrink-0 transition-all shadow-md
-          ${selected ? 'ring-2 ring-yellow-400 ring-offset-1 ring-offset-black scale-105 z-20' : ''}
+        className={`relative ${sizeClasses} bg-gradient-to-b ${sysColor} border-2 flex flex-col justify-between select-none overflow-hidden shrink-0 transition-all duration-200 shadow-lg
+          ${selected ? 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-black scale-105 z-30 shadow-yellow-500/50' : ''}
           ${playable ? 'cursor-pointer hover:border-yellow-300' : ''}
-          ${isRested ? 'rotate-90 origin-center opacity-85' : ''}
+          ${isRested ? 'rotate-90 origin-center opacity-85 shadow-md' : ''}
           ${className}
         `}
       >
-        {/* Cost Badge */}
-        <div className={`absolute -top-1 -left-1 w-4 h-4 rounded-full flex items-center justify-center font-black text-[9px] border border-black shadow z-10 ${badgeColor}`}>
+        {/* Top-Left: Cost Badge */}
+        <div className={`absolute -top-1 -left-1 w-5 h-5 rounded-full flex items-center justify-center font-black text-[10px] border border-black shadow-md z-20 ${badgeColor}`}>
           {card.cost}
         </div>
 
-        {/* Evolution Counter */}
-        {evoCount > 1 && (
-          <div className="absolute -top-1 -right-1 bg-yellow-400 text-slate-950 text-[7px] font-black px-1 rounded-full border border-black z-10 shadow">
-            +{evoCount - 1}
-          </div>
-        )}
-
-        {/* Name Bar */}
-        <div className="pt-2.5 px-0.5 pb-0.5 bg-black/60 text-center truncate whitespace-nowrap overflow-hidden text-[8px] leading-tight font-bold tracking-tight text-white">
-          {card.name}
-        </div>
-
-        {/* Art placeholder / Icon */}
-        <div className="flex-1 flex items-center justify-center relative my-0.5">
-          <div className="w-5 h-5 rounded-full border border-current opacity-30 flex items-center justify-center">
-            <span className="text-[7px] font-bold opacity-60">{card.system[0]}</span>
-          </div>
-
-          {/* Summoning Sickness */}
-          {hasSummoningSickness && !isRested && (
-            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-              <span className="text-[8px] font-black text-amber-300 tracking-tighter bg-black/70 px-1 rounded">
-                待機
-              </span>
+        {/* Top-Right: Evolution Counter or Guard Sigil */}
+        <div className="absolute top-0.5 right-0.5 flex items-center space-x-0.5 z-20">
+          {hasGuard && (
+            <div className="w-4 h-4 rounded bg-cyan-950 border border-cyan-400 text-cyan-300 flex items-center justify-center shadow" title="ガード能力">
+              <Shield size={10} className="fill-cyan-400/40" />
+            </div>
+          )}
+          {evoCount > 1 && (
+            <div className="bg-yellow-400 text-slate-950 text-[8px] font-black px-1 rounded-full border border-black shadow">
+              +{evoCount - 1}
             </div>
           )}
         </div>
 
-        {/* Bottom Stats */}
+        {/* Name Bar */}
+        <div className="pt-3 px-1 pb-0.5 bg-black/75 text-center truncate whitespace-nowrap overflow-hidden text-[8.5px] leading-tight font-black tracking-tight text-white shadow-inner">
+          {card.name}
+        </div>
+
+        {/* Center Art / Sigil Area */}
+        <div className="flex-1 flex flex-col items-center justify-center relative my-0.5 px-1">
+          <div className="w-7 h-7 rounded-full border border-white/20 bg-black/40 flex items-center justify-center shadow-inner">
+            <span className="text-[9px] font-black text-white/70">{card.system[0]}</span>
+          </div>
+          {card.lineage && (
+            <span className="text-[6.5px] font-bold text-amber-300/80 truncate max-w-full mt-0.5">
+              {lineageMap[card.lineage] || card.lineage}
+            </span>
+          )}
+
+          {/* Summoning Sickness (Sleep / 待機 indicator) */}
+          {hasSummoningSickness && !isRested && (
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] flex items-center justify-center z-10">
+              <div className="bg-amber-950/90 border border-amber-400/80 px-1.5 py-0.5 rounded-full flex items-center space-x-0.5 shadow-lg animate-pulse">
+                <Moon size={9} className="text-yellow-300 fill-yellow-300" />
+                <span className="text-[7.5px] font-black text-amber-200">待機</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Bottom Combat Stats Bar (ATK / BRK / DEF) */}
         {isUnit && (
-          <div className="flex justify-between items-center px-1 py-0.5 bg-black/80 text-[8px] font-black border-t border-white/10 leading-none">
-            <span className="text-red-400" title="ATK">{displayAtk}</span>
-            <span className="text-yellow-400 text-[7px]" title="BRK">{displayBrk}</span>
-            <span className="text-blue-400" title="DEF">{displayDef}</span>
+          <div className="grid grid-cols-3 items-center py-0.5 bg-slate-950/95 border-t border-white/15 text-[8.5px] font-black leading-none text-center shadow-inner">
+            <div className="text-red-400 flex items-center justify-center space-x-0.5" title="ATK (攻撃力)">
+              <span>{displayAtk}</span>
+            </div>
+            <div className="text-yellow-400 bg-amber-950/50 py-0.5 rounded mx-0.5" title="BRK (結界破壊力)">
+              <span>{displayBrk}</span>
+            </div>
+            <div className="text-blue-400 flex items-center justify-center space-x-0.5" title="DEF (守備力)">
+              <span>{displayDef}</span>
+            </div>
           </div>
         )}
       </div>

@@ -127,3 +127,15 @@ export const bounceUnit = (state: GameState, instanceId: string): GameState => {
 
   return state;
 };
+
+export const canPlayCard = (
+  card: CardTemplate,
+  currentArcana: number,
+  arcana: CardInstance[],
+  fieldUnitCount: number
+): boolean => {
+  if (currentArcana < card.cost) return false;
+  if ((card.type === 'Unit' || card.type === 'Evolution') && fieldUnitCount >= 6) return false;
+  if (card.system === 'Neutral') return true;
+  return arcana.some(a => getCard(a.cardId).system === card.system);
+};

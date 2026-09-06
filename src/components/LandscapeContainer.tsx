@@ -28,17 +28,14 @@ export const LandscapeContainer: React.FC<Props> = ({ children }) => {
   }
 
   return (
-    <div className="fixed inset-0 bg-black flex items-center justify-center overflow-hidden">
+    <div className="fixed inset-0 w-full h-full bg-slate-950 overflow-hidden select-none">
       <div 
-        className="relative bg-slate-950 shadow-2xl overflow-hidden"
+        className="relative w-full h-full overflow-hidden flex flex-col"
         style={{
-          width: '100%',
-          height: '100%',
-          maxWidth: 'calc(100vh * 16 / 9)',
-          maxHeight: 'calc(100vw * 9 / 16)',
-          aspectRatio: '16/9',
-          paddingLeft: 'max(16px, env(safe-area-inset-left))',
-          paddingRight: 'max(16px, env(safe-area-inset-right))',
+          paddingLeft: 'env(safe-area-inset-left, 0px)',
+          paddingRight: 'env(safe-area-inset-right, 0px)',
+          paddingTop: 'env(safe-area-inset-top, 0px)',
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         }}
       >
         {children}
