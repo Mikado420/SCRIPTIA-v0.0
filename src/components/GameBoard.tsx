@@ -7,7 +7,7 @@ import { BarrierPlates } from './BarrierPlates';
 import { ActionControls } from './ActionControls';
 import { PlaymatSelector, PlaymatThemeId, PLAYMAT_THEMES } from './PlaymatSelector';
 import { ZoneViewerModal, ZoneSelectionConfig } from './ZoneViewerModal';
-import { QuickInspectPanel } from './QuickInspectPanel';
+import { FloatingCardPreview } from './FloatingCardPreview';
 import { AttackArrowOverlay } from './AttackArrowOverlay';
 import { getCard } from '../data/cards';
 import { calculateUnitStats, canPlayCard } from '../engine/engineUtils';
@@ -40,11 +40,11 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
   const [showYourTurnBanner, setShowYourTurnBanner] = useState(false);
   const [clashSparkPos, setClashSparkPos] = useState<{ x: number; y: number } | null>(null);
 
-  // 0.7s Long-Press Card Detail Window State (280px x 220px)
-  const [longPressInspected, setLongPressInspected] = useState<{
-    card: CardTemplate;
-    stats?: { atk: number; def: number; brk: number };
-  } | null>(null);
+  // Smart Floating HUD Card Preview State (Top-Left, No Darkening Overlay)
+  const [previewCard, setPreviewCard] = useState<CardTemplate | null>(null);
+  const [previewStats, setPreviewStats] = useState<{ atk: number; def: number; brk: number } | undefined>(undefined);
+  const touchStartPosRef = useRef<{ x: number; y: number } | null>(null);
+  const isDraggingRef = useRef<boolean>(false);
 
   // Shield Break & Shatter Animations
   const [shatteringOppShieldIdx, setShatteringOppShieldIdx] = useState<number | null>(null);
@@ -257,7 +257,8 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
 
   const handleBoardClick = () => {
     setSelectedCardId(null);
-    setLongPressInspected(null);
+    setPreviewCard(null);
+    setPreviewStats(undefined);
     setArcanaMode(false);
   };
 
@@ -269,6 +270,38 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
       x: (clientX - rect.left) / scale,
       y: (clientY - rect.top) / scale,
     };
+  };
+
+  // Drop onto friendly unit (Evolution summon via HTML5 drag or pointer)
+  const handleDropOnUnit = (baseUnit: UnitState, e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const raw = e.dataTransfer.getData('application/json');
+    if (!raw) return;
+    try {
+      const card = JSON.parse(raw);
+      const cardId = card.cardId || card.id;
+      const tpl = getCard(cardId);
+      if (tpl.type === 'Evolution') {
+        const playable = isMyTurn && state.phase === 'ACTION' && canPlayCard(tpl, me.currentArcana, me.arcana, me.field.length);
+        if (playable) {
+          soundManager.playEvolve();
+          triggerCutin(tpl, '進化召喚！');
+          dispatch({
+            type: 'PLAY_CARD',
+            instanceId: card.instanceId,
+            evolutionTargetId: baseUnit.instanceId,
+          });
+          showToast(`⚡ 【${tpl.name}】へ進化！`, 'success');
+          setSelectedCardId(null);
+        } else {
+          showToast('アルカナまたは進化条件が足りません', 'warn');
+        }
+      }
+    } catch {
+      // ignore
+    }
   };
 
   // Hand Card Drag Handlers (Play & Arcana Charge)
@@ -318,13 +351,47 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
       const playable = isMyTurn && state.phase === 'ACTION' && canPlayCard(tpl, me.currentArcana, me.arcana, me.field.length);
       if (playable) {
         if (tpl.type === 'Evolution') {
-          soundManager.playEvolve();
-        } else if (tpl.type === 'Unit') {
-          soundManager.playSummonUnit();
-        } else if (tpl.type === 'Spell') {
-          soundManager.playCardSwipe();
+          // Identify evolution target: check if dropped over a player unit slot
+          let targetUnit: UnitState | undefined = undefined;
+
+          // Check each friendly unit slot position (slot centers around x: 232 + slotIdx*76, y: 240)
+          me.field.forEach((unit, slotIdx) => {
+            const slotCenterX = 232 + slotIdx * 76;
+            if (Math.abs(coords.x - slotCenterX) <= 42 && coords.y >= 170 && coords.y <= 290) {
+              targetUnit = unit;
+            }
+          });
+
+          // If not dropped directly on a slot, fallback to first valid evolution target on field
+          if (!targetUnit) {
+            if (tpl.evolutionTarget) {
+              targetUnit = me.field.find(u => getCard(u.cards[0].cardId).lineage === tpl.evolutionTarget) || me.field[0];
+            } else if (me.field.length > 0) {
+              targetUnit = me.field[0];
+            }
+          }
+
+          if (targetUnit) {
+            soundManager.playEvolve();
+            triggerCutin(tpl, '進化召喚！');
+            dispatch({
+              type: 'PLAY_CARD',
+              instanceId: card.instanceId,
+              evolutionTargetId: targetUnit.instanceId,
+            });
+            showToast(`⚡ 【${tpl.name}】へ進化召喚！`, 'success');
+            setSelectedCardId(null);
+          } else {
+            showToast('自軍フィールドに進化元のユニットがいません', 'warn');
+          }
+        } else {
+          if (tpl.type === 'Unit') {
+            soundManager.playSummonUnit();
+          } else if (tpl.type === 'Spell') {
+            soundManager.playCardSwipe();
+          }
+          handlePlayHandCard(card.instanceId);
         }
-        handlePlayHandCard(card.instanceId);
       } else {
         showToast('アルカナまたは条件が足りません', 'warn');
       }
@@ -384,25 +451,6 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
     state.phase === 'ACTION' &&
     canPlayCard(getCard(selectedHandCard.cardId), me.currentArcana, me.arcana, me.field.length);
 
-  // Derive inspected card data for Duel Masters top-left popup window
-  const inspectedCardData = selectedCardId
-    ? (me.hand.find(c => c.instanceId === selectedCardId)
-      ? getCard(me.hand.find(c => c.instanceId === selectedCardId)!.cardId)
-      : (me.field.find(u => u.instanceId === selectedCardId)
-        ? getCard(me.field.find(u => u.instanceId === selectedCardId)!.cards[0].cardId)
-        : (opp.field.find(u => u.instanceId === selectedCardId)
-          ? getCard(opp.field.find(u => u.instanceId === selectedCardId)!.cards[0].cardId)
-          : null)))
-    : null;
-
-  const inspectedUnitStats = selectedCardId
-    ? (me.field.find(u => u.instanceId === selectedCardId)
-      ? calculateUnitStats(state, 'player1', me.field.find(u => u.instanceId === selectedCardId)!)
-      : (opp.field.find(u => u.instanceId === selectedCardId)
-        ? calculateUnitStats(state, 'player2', opp.field.find(u => u.instanceId === selectedCardId)!)
-        : undefined))
-    : undefined;
-
   // Attack animation execution with sound & spark flash
   const performAttackAnimation = (attackerId: string, targetId?: string, targetPos?: { x: number; y: number }) => {
     setActiveAttackerId(attackerId);
@@ -430,8 +478,14 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
   const handlePlayerUnitPointerDown = (unit: UnitState, slotIdx: number, e: React.PointerEvent) => {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     e.stopPropagation();
+
+    // Guard against firing long-press if already attacking or dragging
+    if (activeAttackerId !== null || isDraggingRef.current || attackDrag) return;
+
     clearPlayerUnitLongPressTimer();
     hasPlayerUnitLongPressed.current = false;
+    touchStartPosRef.current = { x: e.clientX, y: e.clientY };
+    isDraggingRef.current = false;
 
     // Calculate slot center in canvas coordinates
     let startX = 232 + slotIdx * 76;
@@ -454,14 +508,15 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
       time: Date.now(),
     };
 
-    // Start 700ms long press timer
+    // Start 700ms long press timer for smart floating HUD
     playerUnitLongPressTimer.current = setTimeout(() => {
-      if (!attackDrag) {
+      if (!isDraggingRef.current && activeAttackerId === null && !attackDrag) {
         hasPlayerUnitLongPressed.current = true;
         soundManager.playDetailOpen();
         const card = getCard(unit.cards[0].cardId);
         const stats = calculateUnitStats(state, 'player1', unit);
-        setLongPressInspected({ card, stats });
+        setPreviewCard(card);
+        setPreviewStats(stats);
       }
       clearPlayerUnitLongPressTimer();
     }, 700);
@@ -476,13 +531,12 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
   const handlePlayerUnitPointerMove = (unit: UnitState, slotIdx: number, e: React.PointerEvent) => {
     if (!playerUnitPointerDownPos.current || playerUnitPointerDownPos.current.unit.instanceId !== unit.instanceId) return;
 
-    const dist = Math.hypot(
-      e.clientX - playerUnitPointerDownPos.current.clientX,
-      e.clientY - playerUnitPointerDownPos.current.clientY
-    );
+    const dx = Math.abs(e.clientX - playerUnitPointerDownPos.current.clientX);
+    const dy = Math.abs(e.clientY - playerUnitPointerDownPos.current.clientY);
 
-    // Cancel 700ms long-press when moved >= 10px
-    if (dist >= 10) {
+    // Cancel 700ms long-press immediately when moved more than 8px
+    if (dx > 8 || dy > 8) {
+      isDraggingRef.current = true;
       clearPlayerUnitLongPressTimer();
 
       // Check if unit is ready to attack
@@ -511,13 +565,17 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
     }
 
     const hadLongPressed = hasPlayerUnitLongPressed.current;
-    const wasDragging = attackDrag !== null;
+    const wasDragging = attackDrag !== null || isDraggingRef.current;
 
     playerUnitPointerDownPos.current = null;
+    touchStartPosRef.current = null;
     hasPlayerUnitLongPressed.current = false;
+    setTimeout(() => {
+      isDraggingRef.current = false;
+    }, 50);
 
     if (!wasDragging && !hadLongPressed) {
-      // Short tap (<700ms, <10px)
+      // Short tap (<700ms, <8px)
       soundManager.playCardTouch();
       handleCardClick(unit.instanceId, e as any);
     }
@@ -534,8 +592,13 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
   const handleOppUnitPointerDown = (unit: UnitState, slotIdx: number, e: React.PointerEvent) => {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     e.stopPropagation();
+
+    if (activeAttackerId !== null || isDraggingRef.current || attackDrag) return;
+
     clearOppUnitLongPressTimer();
     hasOppUnitLongPressed.current = false;
+    touchStartPosRef.current = { x: e.clientX, y: e.clientY };
+    isDraggingRef.current = false;
 
     oppUnitPointerDownPos.current = {
       unit,
@@ -545,11 +608,14 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
     };
 
     oppUnitLongPressTimer.current = setTimeout(() => {
-      hasOppUnitLongPressed.current = true;
-      soundManager.playDetailOpen();
-      const card = getCard(unit.cards[0].cardId);
-      const stats = calculateUnitStats(state, 'player2', unit);
-      setLongPressInspected({ card, stats });
+      if (!isDraggingRef.current && activeAttackerId === null && !attackDrag) {
+        hasOppUnitLongPressed.current = true;
+        soundManager.playDetailOpen();
+        const card = getCard(unit.cards[0].cardId);
+        const stats = calculateUnitStats(state, 'player2', unit);
+        setPreviewCard(card);
+        setPreviewStats(stats);
+      }
       clearOppUnitLongPressTimer();
     }, 700);
 
@@ -562,11 +628,10 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
 
   const handleOppUnitPointerMove = (unit: UnitState, e: React.PointerEvent) => {
     if (!oppUnitPointerDownPos.current || oppUnitPointerDownPos.current.unit.instanceId !== unit.instanceId) return;
-    const dist = Math.hypot(
-      e.clientX - oppUnitPointerDownPos.current.clientX,
-      e.clientY - oppUnitPointerDownPos.current.clientY
-    );
-    if (dist >= 10) {
+    const dx = Math.abs(e.clientX - oppUnitPointerDownPos.current.clientX);
+    const dy = Math.abs(e.clientY - oppUnitPointerDownPos.current.clientY);
+    if (dx > 8 || dy > 8) {
+      isDraggingRef.current = true;
       clearOppUnitLongPressTimer();
     }
   };
@@ -579,10 +644,15 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
       // ignore
     }
     const hadLongPressed = hasOppUnitLongPressed.current;
+    const wasDragging = isDraggingRef.current;
     oppUnitPointerDownPos.current = null;
+    touchStartPosRef.current = null;
     hasOppUnitLongPressed.current = false;
+    setTimeout(() => {
+      isDraggingRef.current = false;
+    }, 50);
 
-    if (!hadLongPressed) {
+    if (!hadLongPressed && !wasDragging) {
       soundManager.playCardTouch();
       handleCardClick(unit.instanceId, e as any);
     }
@@ -599,8 +669,13 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
   const handleSlotCardPointerDown = (card: CardTemplate, instanceId: string, e: React.PointerEvent) => {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     e.stopPropagation();
+
+    if (activeAttackerId !== null || isDraggingRef.current || attackDrag) return;
+
     clearSlotLongPressTimer();
     hasSlotLongPressed.current = false;
+    touchStartPosRef.current = { x: e.clientX, y: e.clientY };
+    isDraggingRef.current = false;
 
     slotPointerDownPos.current = {
       clientX: e.clientX,
@@ -610,9 +685,12 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
     };
 
     slotLongPressTimer.current = setTimeout(() => {
-      hasSlotLongPressed.current = true;
-      soundManager.playDetailOpen();
-      setLongPressInspected({ card });
+      if (!isDraggingRef.current && activeAttackerId === null && !attackDrag) {
+        hasSlotLongPressed.current = true;
+        soundManager.playDetailOpen();
+        setPreviewCard(card);
+        setPreviewStats(undefined);
+      }
       clearSlotLongPressTimer();
     }, 700);
 
@@ -625,11 +703,10 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
 
   const handleSlotCardPointerMove = (e: React.PointerEvent) => {
     if (!slotPointerDownPos.current) return;
-    const dist = Math.hypot(
-      e.clientX - slotPointerDownPos.current.clientX,
-      e.clientY - slotPointerDownPos.current.clientY
-    );
-    if (dist >= 10) {
+    const dx = Math.abs(e.clientX - slotPointerDownPos.current.clientX);
+    const dy = Math.abs(e.clientY - slotPointerDownPos.current.clientY);
+    if (dx > 8 || dy > 8) {
+      isDraggingRef.current = true;
       clearSlotLongPressTimer();
     }
   };
@@ -642,10 +719,15 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
       // ignore
     }
     const hadLongPressed = hasSlotLongPressed.current;
+    const wasDragging = isDraggingRef.current;
     slotPointerDownPos.current = null;
+    touchStartPosRef.current = null;
     hasSlotLongPressed.current = false;
+    setTimeout(() => {
+      isDraggingRef.current = false;
+    }, 50);
 
-    if (!hadLongPressed) {
+    if (!hadLongPressed && !wasDragging) {
       soundManager.playCardTouch();
       handleCardClick(instanceId, e as any);
     }
@@ -1383,6 +1465,12 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
                 <div
                   key={unit ? unit.instanceId : `me-slot-${slotIdx}`}
                   id={`me-slot-${slotIdx}`}
+                  onDragOver={(e) => {
+                    if (unit) e.preventDefault();
+                  }}
+                  onDrop={(e) => {
+                    if (unit) handleDropOnUnit(unit, e);
+                  }}
                   onPointerDown={(e) => {
                     if (unit) {
                       handlePlayerUnitPointerDown(unit, slotIdx, e);
@@ -1554,36 +1642,16 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
         </div>
 
         {/* ========================================================================= */}
-        {/* TOP-LEFT DUEL MASTERS GIANT CARD DETAIL POPUP (IMG_9589)                  */}
+        {/* SMART FLOATING HUD CARD PREVIEW (TOP-LEFT, NO DARKENING OVERLAY)          */}
         {/* ========================================================================= */}
-        {(() => {
-          const active = longPressInspected
-            ? longPressInspected
-            : (inspectedCardData
-              ? { card: inspectedCardData, stats: inspectedUnitStats }
-              : null);
-          if (!active) return null;
-          return (
-            <>
-              <div
-                id="inspect-modal-backdrop"
-                className="absolute inset-0 z-45 bg-black/40 backdrop-blur-[0.5px] pointer-events-auto"
-                onClick={() => {
-                  setLongPressInspected(null);
-                  setSelectedCardId(null);
-                }}
-              />
-              <QuickInspectPanel
-                card={active.card}
-                computedStats={active.stats}
-                onClose={() => {
-                  setLongPressInspected(null);
-                  setSelectedCardId(null);
-                }}
-              />
-            </>
-          );
-        })()}
+        <FloatingCardPreview
+          card={previewCard}
+          computedStats={previewStats}
+          onClose={() => {
+            setPreviewCard(null);
+            setPreviewStats(undefined);
+          }}
+        />
 
         {/* ========================================================================= */}
         {/* 5. RIGHT CONTROLS: 3D Turn End Button (Middle)                            */}
@@ -1616,7 +1684,10 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
             dispatch={dispatch}
             selectedCard={selectedCardId}
             onSelect={(id) => setSelectedCardId(id || null)}
-            onInspect={onInspect}
+            onInspect={(card) => {
+              setPreviewCard(card);
+              setPreviewStats(undefined);
+            }}
             onPlayCard={handlePlayHandCard}
             onArcanaPlace={handlePlaceHandArcana}
             onCardDragStart={handleCardDragStart}

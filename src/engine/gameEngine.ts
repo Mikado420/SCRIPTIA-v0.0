@@ -195,7 +195,19 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
         p.arcana.some(a => getCard(a.cardId).system === template.system);
       if (!hasAffinity) return newState;
 
-      if (template.type === 'Evolution' && !action.evolutionTargetId) return newState;
+      if (template.type === 'Evolution') {
+        let targetUnit = action.evolutionTargetId
+          ? p.field.find(u => u.instanceId === action.evolutionTargetId)
+          : undefined;
+        if (!targetUnit) {
+          if (template.evolutionTarget) {
+            targetUnit = p.field.find(u => getCard(u.cards[0].cardId).lineage === template.evolutionTarget);
+          } else if (p.field.length > 0) {
+            targetUnit = p.field[0];
+          }
+        }
+        if (!targetUnit) return newState;
+      }
       if (template.targetReq && !action.targetId && template.type !== 'Evolution') return newState;
 
       p.currentArcana -= template.cost;
@@ -262,7 +274,16 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
           });
         }
       } else if (template.type === 'Evolution') {
-        const targetUnit = p.field.find(u => u.instanceId === action.evolutionTargetId);
+        let targetUnit = action.evolutionTargetId
+          ? p.field.find(u => u.instanceId === action.evolutionTargetId)
+          : undefined;
+        if (!targetUnit) {
+          if (template.evolutionTarget) {
+            targetUnit = p.field.find(u => getCard(u.cards[0].cardId).lineage === template.evolutionTarget);
+          } else if (p.field.length > 0) {
+            targetUnit = p.field[0];
+          }
+        }
         if (!targetUnit) return newState;
         // Invariant Principle 4: Stack evolution on top of base unit
         targetUnit.cards.unshift(card);

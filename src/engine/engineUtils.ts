@@ -70,7 +70,8 @@ export const canPlayCard = (
   fieldUnitCount: number
 ): boolean => {
   if (currentArcana < card.cost) return false;
-  if ((card.type === 'Unit' || card.type === 'Evolution') && fieldUnitCount >= 6) return false;
+  if (card.type === 'Unit' && fieldUnitCount >= 6) return false;
+  if (card.type === 'Evolution' && fieldUnitCount === 0) return false;
   if (card.system === 'Neutral') return true;
   return arcana.some(a => getCard(a.cardId).system === card.system);
 };
