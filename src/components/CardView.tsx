@@ -12,6 +12,34 @@ interface CardViewProps {
   playable?: boolean;
 }
 
+const typeMap: Record<string, string> = {
+  'Unit': 'ユニット',
+  'Spell': 'スペル',
+  'Rune': 'ルーン',
+  'Domain': 'ドメイン',
+  'Evolution': '進化',
+};
+
+const lineageMap: Record<string, string> = {
+  'Rampage': 'ランページ',
+  'Mechanoid': 'メカノイド',
+  'Dragon': 'ドラゴン',
+  'Merfolk': 'マーフォーク',
+  'Aquatica': 'アクアティカ',
+  'Leviathan': 'リヴァイアサン',
+  'Bestia': 'ベスティア',
+  'Insect': 'インセクト',
+  'Titan': 'タイタン',
+  'Guardian': 'ガーディアン',
+  'Oracle': 'オラクル',
+  'Angel': 'エンジェル',
+  'Parasite': 'パラサイト',
+  'Ghost': 'ゴースト',
+  'Demon': 'デーモン',
+  'Neutral': 'ニュートラル',
+  'None': '',
+};
+
 export const CardView: React.FC<CardViewProps> = ({ instance, template, onClick, className = '', isFaceDown, selected, playable }) => {
   const card = template || (instance ? getCard(instance.cardId) : null);
 
@@ -52,11 +80,14 @@ export const CardView: React.FC<CardViewProps> = ({ instance, template, onClick,
 
   const sysColor = getSystemColor(card.system);
   const badgeColor = getBadgeColor(card.system);
+  
+  const typeStr = typeMap[card.type] || card.type;
+  const lineageStr = card.lineage ? (lineageMap[card.lineage] || card.lineage) : '';
 
   return (
     <div 
       onClick={onClick}
-      className={`w-28 h-40 flex flex-col relative rounded-md shadow-lg border-2 select-none overflow-hidden transition-all
+      className={`w-28 h-40 flex flex-col relative rounded-md shadow-lg border-2 select-none overflow-hidden transition-all group
         ${sysColor} 
         ${selected ? 'ring-4 ring-yellow-400 scale-105 z-10' : ''} 
         ${playable ? 'cursor-pointer hover:border-yellow-300' : ''}
@@ -75,16 +106,23 @@ export const CardView: React.FC<CardViewProps> = ({ instance, template, onClick,
 
       {/* Type & Lineage */}
       <div className="px-1 py-0.5 text-[8px] bg-black/20 flex justify-between uppercase">
-        <span>{card.type}</span>
-        {card.lineage && <span>{card.lineage}</span>}
+        <span>{typeStr}</span>
+        {lineageStr && <span>{lineageStr}</span>}
       </div>
 
       {/* Image Placeholder */}
-      <div className="flex-1 flex items-center justify-center bg-black/10">
+      <div className="flex-1 flex items-center justify-center bg-black/10 relative">
          {card.type === 'Unit' || card.type === 'Evolution' ? (
            <div className="w-10 h-10 rounded-full border border-current opacity-30" />
          ) : (
            <div className="w-8 h-8 rotate-45 border border-current opacity-30" />
+         )}
+         
+         {/* Hover Details overlay */}
+         {card.effectText && (
+            <div className="absolute inset-0 bg-black/90 text-white text-[8px] p-1 opacity-0 group-hover:opacity-100 transition-opacity z-20 overflow-y-auto leading-tight text-left">
+              {card.effectText}
+            </div>
          )}
       </div>
 

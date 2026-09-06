@@ -73,7 +73,7 @@ export const Board: React.FC<BoardProps> = ({ state, dispatch }) => {
         } else if (selectedAttacker) {
            // Attack enemy unit (only active if allowed, normally only rested)
            const attackerTpl = getCard(state.player1.field.find(u => u.instanceId === selectedAttacker)!.cards[0].cardId);
-           if (unit.isRested || attackerTpl.effectText?.includes('Can attack active')) {
+           if (unit.isRested || attackerTpl.effectText?.includes('アクティブ状態の相手ユニットを攻撃できる')) {
              dispatch({ type: 'DECLARE_ATTACK', attackerId: selectedAttacker, targetId: unit.instanceId });
              setSelectedAttacker(null);
            }
@@ -127,7 +127,7 @@ export const Board: React.FC<BoardProps> = ({ state, dispatch }) => {
          {/* Runes & Domain & Deck Info */}
          <div className="flex gap-2 w-48 shrink-0">
             <div className="flex flex-col gap-1 flex-1">
-              <div className="text-xs text-slate-400 text-center">Runes</div>
+              <div className="text-xs text-slate-400 text-center">ルーン</div>
               <div className="flex gap-1 h-24">
                 {[0,1].map(i => (
                    <div key={i} className="flex-1 border border-dashed border-slate-600 rounded bg-slate-800/30 flex items-center justify-center">
@@ -137,7 +137,7 @@ export const Board: React.FC<BoardProps> = ({ state, dispatch }) => {
               </div>
             </div>
             <div className="flex flex-col gap-1 w-20">
-              <div className="text-xs text-slate-400 text-center">Domain</div>
+              <div className="text-xs text-slate-400 text-center">ドメイン</div>
               <div className="h-24 border border-dashed border-slate-600 rounded bg-slate-800/30 flex items-center justify-center">
                 {p.domain ? <CardView instance={p.domain} className="scale-50" /> : null}
               </div>
@@ -156,7 +156,7 @@ export const Board: React.FC<BoardProps> = ({ state, dispatch }) => {
          >
            <Shield size={32} className={p.barrier > 0 ? 'text-blue-400' : 'text-red-500'} />
            <div className="text-3xl font-black mt-2">{p.barrier}</div>
-           <div className="text-xs text-slate-400">Barrier</div>
+           <div className="text-xs text-slate-400">結界</div>
          </div>
 
          {/* Field */}
@@ -201,19 +201,19 @@ export const Board: React.FC<BoardProps> = ({ state, dispatch }) => {
         <div className="h-12 bg-slate-900 border-y border-slate-700 flex items-center justify-between px-8 shadow-xl z-20 relative">
           <div className="flex gap-4">
             <div className="text-xl font-black tracking-widest text-slate-400">SCRIPTIA</div>
-            <div className="text-sm font-bold bg-slate-800 px-3 py-1 rounded text-yellow-400">TURN {state.turnCount}</div>
+            <div className="text-sm font-bold bg-slate-800 px-3 py-1 rounded text-yellow-400">ターン {state.turnCount}</div>
           </div>
           
           <div className="flex gap-4 items-center">
             <div className="text-lg font-bold text-white">
-              {state.currentPlayer === 'player1' ? 'YOUR TURN' : 'OPPONENT TURN'} - {state.phase}
+              {state.currentPlayer === 'player1' ? 'あなたのターン' : '相手のターン'} - {state.phase === 'ARCANA_PLACEMENT' ? 'アルカナチャージ' : state.phase === 'ACTION' ? '行動フェーズ' : state.phase}
             </div>
             {state.currentPlayer === 'player1' && state.phase !== 'ACTION' && (
               <button 
                 onClick={() => dispatch({type:'NEXT_PHASE'})}
                 className="px-4 py-1 bg-blue-600 hover:bg-blue-500 rounded font-bold transition-colors"
               >
-                {state.phase === 'ARCANA_PLACEMENT' ? 'Skip to Action' : 'Next Phase'}
+                {state.phase === 'ARCANA_PLACEMENT' ? '行動フェーズへ' : '次へ'}
               </button>
             )}
             {state.currentPlayer === 'player1' && state.phase === 'ACTION' && (
@@ -221,7 +221,7 @@ export const Board: React.FC<BoardProps> = ({ state, dispatch }) => {
                 onClick={() => dispatch({type:'NEXT_PHASE'})}
                 className="px-4 py-1 bg-red-600 hover:bg-red-500 rounded font-bold transition-colors"
               >
-                End Turn
+                ターン終了
               </button>
             )}
           </div>
@@ -232,16 +232,16 @@ export const Board: React.FC<BoardProps> = ({ state, dispatch }) => {
           <div className="absolute inset-0 bg-black/60 z-30 flex items-center justify-center pointer-events-none">
             <div className="bg-slate-800 border-2 border-yellow-500 p-6 rounded-xl shadow-2xl pointer-events-auto flex flex-col items-center">
               <h2 className="text-2xl font-bold mb-4 text-yellow-400">
-                {state.prompt.type === 'GUARD' ? 'Opponent is attacking!' : 'Select Target'}
+                {state.prompt.type === 'GUARD' ? '相手の攻撃！' : '対象を選択'}
               </h2>
               {state.prompt.type === 'GUARD' && (
                 <div className="flex flex-col items-center gap-4">
-                  <p>Select a valid active Guard unit on the field, or take the hit.</p>
+                  <p>フィールドのアクティブな守護ユニットを選択するか、直接攻撃を受けます。</p>
                   <button 
                     className="px-6 py-2 bg-red-600 hover:bg-red-500 font-bold rounded"
                     onClick={() => dispatch({ type: 'RESOLVE_GUARD' })}
                   >
-                    Skip Guard (Take Hit)
+                    守護しない（攻撃を受ける）
                   </button>
                 </div>
               )}
@@ -252,7 +252,7 @@ export const Board: React.FC<BoardProps> = ({ state, dispatch }) => {
         {state.winner && (
           <div className="absolute inset-0 bg-black/80 z-50 flex items-center justify-center">
             <div className="text-6xl font-black text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.8)]">
-              {state.winner === 'player1' ? 'YOU WIN!' : 'OPPONENT WINS!'}
+              {state.winner === 'player1' ? 'あなたの勝利！' : '相手の勝利！'}
             </div>
           </div>
         )}
@@ -263,7 +263,7 @@ export const Board: React.FC<BoardProps> = ({ state, dispatch }) => {
 
       {/* Right Sidebar Log */}
       <div className="w-80 bg-slate-900 border-l border-slate-800 flex flex-col shrink-0">
-        <div className="p-4 border-b border-slate-800 font-bold bg-slate-800/50">Action Log</div>
+        <div className="p-4 border-b border-slate-800 font-bold bg-slate-800/50">アクションログ</div>
         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2 text-sm font-mono text-slate-300">
           {state.log.map((entry, i) => (
             <div key={i} className="border-b border-slate-800/50 pb-1">{entry}</div>

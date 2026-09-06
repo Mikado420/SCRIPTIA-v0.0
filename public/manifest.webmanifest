@@ -1,0 +1,16 @@
+{
+  "name": "SCRIPTIA - 魔導書TCG",
+  "short_name": "SCRIPTIA",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "landscape-primary",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}

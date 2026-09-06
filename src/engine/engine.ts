@@ -37,7 +37,7 @@ export const createInitialState = (): GameState => {
     currentPlayer: 'player1',
     turnCount: 1,
     phase: 'ARCANA_PLACEMENT',
-    log: ['Game started. Player 1 goes first. Phase: ARCANA_PLACEMENT'],
+    log: ['ゲーム開始。Player 1の先攻。フェーズ：アルカナチャージ'],
     prompt: null,
     winner: null,
     hasPlacedArcanaThisTurn: false
@@ -67,24 +67,24 @@ const destroyUnit = (state: GameState, instanceId: string): GameState => {
   if (template.id === 'BB-05' || template.id === 'BB-11') {
     player.field = player.field.filter(u => u.instanceId !== instanceId);
     player.hand.push(...unit.cards);
-    newState.log.push(`${template.name} returned to hand instead of being destroyed.`);
+    newState.log.push(`${template.name} は破壊されるかわりに手札に戻った。`);
     return newState;
   }
 
   player.field = player.field.filter(u => u.instanceId !== instanceId);
   player.archive.push(...unit.cards);
-  newState.log.push(`${template.name} was destroyed.`);
+  newState.log.push(`${template.name} は破壊された。`);
   return newState;
 };
 
 const checkWinCondition = (state: GameState, opponentKey: 'player1' | 'player2', brk: number): GameState => {
   const oldBarrier = state[opponentKey].barrier;
   state[opponentKey].barrier = Math.max(0, oldBarrier - brk);
-  state.log.push(`Direct Attack broke ${brk} barrier(s). (Remaining: ${state[opponentKey].barrier})`);
+  state.log.push(`直接攻撃成功！結界が ${brk} つ破壊された。（残り: ${state[opponentKey].barrier}）`);
 
   if (oldBarrier === 0 && brk > 0) {
     state.winner = state.currentPlayer;
-    state.log.push(`${state.currentPlayer} wins by Direct Attack!`);
+    state.log.push(`${state.currentPlayer} は直接攻撃で勝利した！`);
   }
   return state;
 };
@@ -103,7 +103,7 @@ const resolveCombat = (state: GameState, attackerId: string, defenderId: string)
   const def = (dTpl.def || 0) + defender.modifiers.def;
 
   let newState = { ...state };
-  newState.log.push(`Combat: ${aTpl.name} (ATK ${atk}) vs ${dTpl.name} (DEF ${def})`);
+  newState.log.push(`戦闘： ${aTpl.name} (ATK ${atk}) vs ${dTpl.name} (DEF ${def})`);
 
   let aDestroyed = false;
   let dDestroyed = false;
@@ -133,7 +133,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
     case 'NEXT_PHASE': {
       if (newState.phase === 'ARCANA_PLACEMENT') {
         newState.phase = 'ACTION';
-        newState.log.push(`${newState.currentPlayer} entered ACTION phase.`);
+        newState.log.push(`${newState.currentPlayer} は行動フェーズに入った。`);
         return newState;
       }
       if (newState.phase === 'ACTION') {
@@ -152,12 +152,12 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
             nextP.hand.push(nextP.deck.pop()!);
           } else {
              newState.winner = newState.currentPlayer === 'player1' ? 'player2' : 'player1';
-             newState.log.push(`${newState.currentPlayer} decked out!`);
+             newState.log.push(`${newState.currentPlayer} はデッキ切れで敗北した！`);
              return newState;
           }
         }
         newState.phase = 'ARCANA_PLACEMENT';
-        newState.log.push(`--- Turn ${newState.turnCount} : ${newState.currentPlayer} ---`);
+        newState.log.push(`--- ターン ${newState.turnCount} : ${newState.currentPlayer} ---`);
         return newState;
       }
       return state;
@@ -172,7 +172,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
       p.maxArcana += 1;
       p.currentArcana += 1;
       newState.hasPlacedArcanaThisTurn = true;
-      newState.log.push(`${p.id} placed a card in Arcana.`);
+      newState.log.push(`${p.id} はアルカナを配置した。`);
       return newState;
     }
     case 'PLAY_CARD': {
@@ -202,7 +202,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
           hasSummoningSickness: !template.keywords?.includes('Rush'),
           modifiers: { atk: 0, def: 0, brk: 0 }
         });
-        newState.log.push(`${p.id} summoned ${template.name}.`);
+        newState.log.push(`${p.id} は ${template.name} を召喚した。`);
         
         // Simple hardcoded effects for MVP
         if (template.id === 'BR-08' && action.targetId) {
@@ -212,7 +212,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
            if (targetData) {
              targetData.player.field = targetData.player.field.filter(u => u.instanceId !== action.targetId);
              targetData.player.hand.push(...targetData.unit.cards);
-             newState.log.push(`${template.name} bounced a unit.`);
+             newState.log.push(`${template.name} はユニットを手札に戻した。`);
            }
         }
       } else if (template.type === 'Evolution') {
@@ -221,13 +221,13 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
         targetUnit.cards.unshift(card);
         targetUnit.instanceId = card.instanceId;
         targetUnit.hasSummoningSickness = false;
-        newState.log.push(`${p.id} evolved into ${template.name}.`);
+        newState.log.push(`${p.id} は ${template.name} に進化した。`);
         
         if (template.id === 'BD-11' && action.targetId) {
           newState = destroyUnit(newState, action.targetId);
         }
       } else if (template.type === 'Spell') {
-        newState.log.push(`${p.id} cast ${template.name}.`);
+        newState.log.push(`${p.id} は ${template.name} を使用した。`);
         if (template.id === 'BR-12' && action.targetId) {
            newState = destroyUnit(newState, action.targetId);
         }
@@ -235,11 +235,11 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
       } else if (template.type === 'Rune') {
         if (p.runes.length >= 2) return state; // Can't play if full
         p.runes.push(card);
-        newState.log.push(`${p.id} set a Rune.`);
+        newState.log.push(`${p.id} はルーンをセットした。`);
       } else if (template.type === 'Domain') {
         if (p.domain) p.archive.push(p.domain);
         p.domain = card;
-        newState.log.push(`${p.id} placed Domain ${template.name}.`);
+        newState.log.push(`${p.id} はドメイン ${template.name} を配置した。`);
       }
       return newState;
     }
@@ -258,7 +258,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
          const canGuard = opp.field.some(u => !u.isRested && getCard(u.cards[0].cardId).keywords?.includes('Guard'));
          if (canGuard && !aTpl.keywords?.includes('CannotBeGuarded')) {
             newState.prompt = { type: 'GUARD', playerId: oppKey, attackerId: action.attackerId };
-            newState.log.push(`${p.id} declares direct attack. Waiting for guard...`);
+            newState.log.push(`${p.id} は直接攻撃を宣言！守護を待機中...`);
             return newState;
          } else {
             return checkWinCondition(newState, oppKey, (aTpl.brk || 0) + attacker.modifiers.brk);
@@ -274,7 +274,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
         const guarder = opp.field.find(u => u.instanceId === action.guarderId);
         if (guarder) {
           guarder.isRested = true;
-          newState.log.push(`${oppKey} guards!`);
+          newState.log.push(`${oppKey} が守護を発動！`);
           return resolveCombat(newState, attackerId, action.guarderId);
         }
       }
