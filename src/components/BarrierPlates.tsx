@@ -6,6 +6,7 @@ interface Props {
   max?: number;
   isOpponent?: boolean;
   isTargetable?: boolean;
+  orientation?: 'horizontal' | 'vertical';
   onClick?: () => void;
 }
 
@@ -14,6 +15,7 @@ export const BarrierPlates: React.FC<Props> = ({
   max = 5,
   isOpponent = false,
   isTargetable = false,
+  orientation = 'horizontal',
   onClick,
 }) => {
   const prevCount = useRef(count);
@@ -31,17 +33,21 @@ export const BarrierPlates: React.FC<Props> = ({
     prevCount.current = count;
   }, [count]);
 
+  const isVertical = orientation === 'vertical';
+
   return (
     <div
       onClick={onClick}
-      className={`flex items-center space-x-1 sm:space-x-1.5 px-2 py-0.5 sm:py-1 rounded-xl transition-all select-none ${
+      className={`flex ${
+        isVertical ? 'flex-col items-center space-y-1.5 py-1.5 px-1.5' : 'flex-row items-center space-x-1 sm:space-x-1.5 px-2 py-0.5 sm:py-1'
+      } rounded-xl transition-all select-none ${
         isTargetable
           ? 'cursor-pointer ring-2 ring-red-500 bg-red-950/80 shadow-lg shadow-red-500/50 animate-pulse'
           : 'bg-black/50 backdrop-blur-sm border border-white/10 shadow-md'
       }`}
       title={isTargetable ? '相手の結界を直接攻撃！' : `結界: ${count}/${max}`}
     >
-      <div className="flex items-center space-x-1">
+      <div className={`flex ${isVertical ? 'flex-col space-y-1' : 'flex-row items-center space-x-1'}`}>
         {Array.from({ length: max }).map((_, idx) => {
           const isActive = idx < count;
           const isJustShattered = shatteringIndex === idx;

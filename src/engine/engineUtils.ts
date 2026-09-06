@@ -60,73 +60,8 @@ export const findUnitAndOwner = (state: GameState, instanceId: string) => {
   return null;
 };
 
-export const destroyUnit = (state: GameState, instanceId: string): GameState => {
-  const found = findUnitAndOwner(state, instanceId);
-  if (!found) return state;
-  const { unit, player, playerId } = found;
-  const oppKey = playerId === 'player1' ? 'player2' : 'player1';
-  const tpl = getCard(unit.cards[0].cardId);
-
-  // Replacement effect (BB-05, BB-11) - Return to hand instead
-  if (tpl.id === 'BB-05' || tpl.id === 'BB-11') {
-    player.field = player.field.filter(u => u.instanceId !== instanceId);
-    player.hand.push(...unit.cards);
-    state.log.push(`【${tpl.name}】は破壊されるかわりに手札に戻った。`);
-    // BB-15 知恵の回廊 (Domain trigger for bouncing)
-    if (state[oppKey].domain?.cardId === 'BB-15' && !state.flags.domain15Used) {
-      if (state[oppKey].deck.length > 0) {
-        state[oppKey].hand.push(state[oppKey].deck.pop()!);
-        state.log.push(`【知恵の回廊】の効果で ${oppKey} はカードを1枚引いた。`);
-        state.flags.domain15Used = true;
-      }
-    }
-    return state;
-  }
-
-  // Normal Destroy
-  player.field = player.field.filter(u => u.instanceId !== instanceId);
-  player.archive.push(...unit.cards);
-  state.log.push(`【${tpl.name}】は破壊された。`);
-
-  // BD-15 死霊の祭壇 (Domain trigger for own unit destroyed)
-  if (player.domain?.cardId === 'BD-15' && !state.flags.domain15Used) {
-     const oppField = state[oppKey].field;
-     if (oppField.length > 0) {
-        const target = oppField[Math.floor(Math.random() * oppField.length)];
-        target.modifiers.push({ sourceId: 'BD-15', atk: 0, def: -20, brk: 0, duration: 'UNTIL_NEXT_TURN_END' });
-        state.log.push(`【死霊の祭壇】の効果で 【${getCard(target.cards[0].cardId).name}】 のDEF-20（次のターン終了時まで）。`);
-        state.flags.domain15Used = true;
-        // Check if DEF <= 0 immediately
-        if (calculateUnitStats(state, oppKey, target).def <= 0) {
-           return destroyUnit(state, target.instanceId);
-        }
-     }
-  }
-
-  return state;
-};
-
-export const bounceUnit = (state: GameState, instanceId: string): GameState => {
-  const found = findUnitAndOwner(state, instanceId);
-  if (!found) return state;
-  const { unit, player, playerId } = found;
-  const oppKey = playerId === 'player1' ? 'player2' : 'player1';
-
-  player.field = player.field.filter(u => u.instanceId !== instanceId);
-  player.hand.push(...unit.cards); // Separate evolution stack
-  state.log.push(`【${getCard(unit.cards[0].cardId).name}】は手札に戻された。`);
-
-  // BB-15 Domain Check
-  if (state[oppKey].domain?.cardId === 'BB-15' && !state.flags.domain15Used) {
-    if (state[oppKey].deck.length > 0) {
-      state[oppKey].hand.push(state[oppKey].deck.pop()!);
-      state.log.push(`【知恵の回廊】の効果で ${oppKey} はカードを1枚引いた。`);
-      state.flags.domain15Used = true;
-    }
-  }
-
-  return state;
-};
+// Export destroy system functions
+export { destroyUnit, bounceUnit, sendUnitToArcana, registerOnUnitDestroyedListener } from './destroySystem';
 
 export const canPlayCard = (
   card: CardTemplate,

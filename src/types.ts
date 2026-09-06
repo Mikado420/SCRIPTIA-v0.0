@@ -54,12 +54,13 @@ export interface PlayerState {
   runes: CardInstance[];
   domain: CardInstance | null;
   archive: CardInstance[];
+  pendingCard?: CardInstance | null;
 }
 
 export type Phase = 'TURN_START' | 'DRAW' | 'ARCANA_PLACEMENT' | 'ACTION' | 'END';
 
 export interface PromptState {
-  type: 'GUARD' | 'TRIGGER' | 'RUNE_TRIGGER';
+  type: 'GUARD' | 'TRIGGER' | 'RUNE_TRIGGER' | 'TARGET_SELECTION';
   playerId: string;
   attackerId?: string;
   sourceId?: string;
@@ -67,6 +68,7 @@ export interface PromptState {
   message?: string;
   text?: string;
   validTargets?: string[];
+  spellCardId?: string;
 }
 
 export interface GameState {
@@ -89,6 +91,9 @@ export type GameAction =
   | { type: 'NEXT_PHASE' }
   | { type: 'PLACE_ARCANA'; instanceId: string }
   | { type: 'PLAY_CARD'; instanceId: string; targetId?: string; evolutionTargetId?: string }
+  | { type: 'START_SPELL_CAST'; instanceId: string }
+  | { type: 'CANCEL_SPELL_CAST' }
+  | { type: 'RESOLVE_SPELL_TARGET'; targetId: string }
   | { type: 'DECLARE_ATTACK'; attackerId: string; targetId?: string } 
   | { type: 'RESOLVE_GUARD'; guarderId?: string }
   | { type: 'RESOLVE_TRIGGER'; apply: boolean; targetId?: string }

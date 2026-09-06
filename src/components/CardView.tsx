@@ -127,7 +127,7 @@ export const CardView: React.FC<CardViewProps> = ({
         className={`relative ${sizeClasses} bg-gradient-to-b ${sysColor} border-2 flex flex-col justify-between select-none overflow-hidden shrink-0 transition-all duration-200 shadow-lg
           ${selected ? 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-black scale-105 z-30 shadow-yellow-500/50' : ''}
           ${playable ? 'cursor-pointer hover:border-yellow-300' : ''}
-          ${isRested ? 'rotate-90 scale-[0.85] origin-center opacity-85 shadow-md' : ''}
+          ${isRested ? 'rotate-90 scale-[0.75] origin-center opacity-85 shadow-md' : ''}
           ${className}
         `}
       >

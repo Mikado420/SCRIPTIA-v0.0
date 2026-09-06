@@ -10,7 +10,7 @@ export const CARDS: CardTemplate[] = [
   { id: 'BR-06', name: '掃討兵 バルカン', cost: 4, system: 'Fire', type: 'Unit', lineage: 'Mechanoid', atk: 50, def: 30, brk: 1 },
   { id: 'BR-07', name: '韋駄天の キース', cost: 4, system: 'Fire', type: 'Unit', lineage: 'Rampage', atk: 20, def: 20, brk: 1, keywords: ['Rush'], effectText: '【速攻】' },
   { id: 'BR-08', name: 'クリムゾン・ドラゴン', cost: 5, system: 'Fire', type: 'Unit', lineage: 'Dragon', atk: 30, def: 30, brk: 1, targetReq: 'opponent_unit', effectText: '◆登場した時、相手のDEF40以下のユニット1体を破壊する。' },
-  { id: 'BR-09', name: '孤高の狩人 クロウ', cost: 5, system: 'Fire', type: 'Unit', lineage: 'Rampage', atk: 50, def: 30, brk: 1, effectText: '◆アクティブ状態の相手ユニットを攻撃できる。' },
+  { id: 'BR-09', name: '孤高の狩人 クロウ', cost: 5, system: 'Fire', type: 'Unit', lineage: 'Rampage', atk: 50, def: 30, brk: 1, keywords: ['CanAttackActive'], effectText: '◆アクティブ状態の相手ユニットを攻撃できる。' },
   { id: 'BR-10', name: 'ボルカノ・ドラゴン', cost: 6, system: 'Fire', type: 'Unit', lineage: 'Dragon', atk: 60, def: 60, brk: 2, effectText: '◆自分のアーカイブにある火のユニット1枚につき、このユニットのATK+10。' },
   { id: 'BR-11', name: '超甲機神 グレンバーン', cost: 4, system: 'Fire', type: 'Evolution', lineage: 'Rampage', atk: 60, def: 60, brk: 2, evolutionTarget: 'Rampage', targetReq: 'own_unit', effectText: '【進化】火のランページ\n◆自分の他のランページすべてのATK+10。' },
   { id: 'BR-12', name: 'フレイム・ダーツ', cost: 2, system: 'Fire', type: 'Spell', targetReq: 'opponent_unit', effectText: '◆相手のDEF20以下のユニット1体を破壊する。' },
