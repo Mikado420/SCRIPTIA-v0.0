@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { CardView } from './CardView';
 import { CardInstance, GameState, GameAction } from '../types';
 import { getCard } from '../data/cards';
 import { canPlayCard } from '../engine/engineUtils';
-import { Zap, Play, Info, X, ChevronUp } from 'lucide-react';
+import { Zap, ChevronUp, X } from 'lucide-react';
 
 interface Props {
   hand: CardInstance[];
@@ -14,6 +14,11 @@ interface Props {
   onInspect: (card: any) => void;
   onPlayCard?: (id: string) => void;
   onArcanaPlace?: (id: string) => void;
+  // Drag and Drop callbacks
+  onCardDragStart?: (card: CardInstance, clientX: number, clientY: number) => void;
+  onCardDragMove?: (clientX: number, clientY: number) => void;
+  onCardDragEnd?: (card: CardInstance, clientX: number, clientY: number) => void;
+  draggingCardId?: string | null;
 }
 
 export const HandTray: React.FC<Props> = ({
@@ -25,9 +30,17 @@ export const HandTray: React.FC<Props> = ({
   onInspect,
   onPlayCard,
   onArcanaPlace,
+  onCardDragStart,
+  onCardDragMove,
+  onCardDragEnd,
+  draggingCardId,
 }) => {
   const me = state.player1;
   const isMyTurn = state.currentPlayer === 'player1';
+
+  // Pointer drag tracking refs to differentiate tap vs drag
+  const pointerDownPos = useRef<{ x: number; y: number; id: string; time: number } | null>(null);
+  const isDraggingRef = useRef<boolean>(false);
 
   // Dynamic overlap for right-aligned hand fan (Duel Masters Plays style)
   const getOverlapMargin = () => {
@@ -38,14 +51,84 @@ export const HandTray: React.FC<Props> = ({
     return '-ml-8 sm:-ml-9';
   };
 
+  const handlePointerDown = (c: CardInstance, e: React.PointerEvent) => {
+    e.stopPropagation();
+    pointerDownPos.current = {
+      x: e.clientX,
+      y: e.clientY,
+      id: c.instanceId,
+      time: Date.now(),
+    };
+    isDraggingRef.current = false;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (c: CardInstance, e: React.PointerEvent) => {
+    if (!pointerDownPos.current || pointerDownPos.current.id !== c.instanceId) return;
+    const dist = Math.hypot(
+      e.clientX - pointerDownPos.current.x,
+      e.clientY - pointerDownPos.current.y
+    );
+
+    if (!isDraggingRef.current && dist > 7) {
+      isDraggingRef.current = true;
+      if (onCardDragStart) {
+        onCardDragStart(c, e.clientX, e.clientY);
+      }
+    }
+
+    if (isDraggingRef.current && onCardDragMove) {
+      onCardDragMove(e.clientX, e.clientY);
+    }
+  };
+
+  const handlePointerUp = (c: CardInstance, e: React.PointerEvent) => {
+    if (!pointerDownPos.current || pointerDownPos.current.id !== c.instanceId) return;
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+
+    const wasDragging = isDraggingRef.current;
+    pointerDownPos.current = null;
+    isDraggingRef.current = false;
+
+    if (wasDragging) {
+      if (onCardDragEnd) {
+        onCardDragEnd(c, e.clientX, e.clientY);
+      }
+    } else {
+      // Tap action: toggle selection & inspect
+      const cardData = getCard(c.cardId);
+      const nextSel = selectedCard === c.instanceId ? '' : c.instanceId;
+      onSelect(nextSel);
+      if (nextSel) onInspect(cardData);
+    }
+  };
+
+  const handlePointerCancel = (c: CardInstance, e: React.PointerEvent) => {
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+    if (isDraggingRef.current && onCardDragEnd) {
+      onCardDragEnd(c, e.clientX, e.clientY);
+    }
+    pointerDownPos.current = null;
+    isDraggingRef.current = false;
+  };
+
   return (
     <div
       id="hand-tray-container"
-      className="relative flex items-end justify-end pointer-events-auto h-[92px] select-none pr-1"
+      className="relative flex items-end justify-end pointer-events-auto h-[92px] select-none pr-1 touch-none"
     >
       <div className="flex items-end justify-end">
         {hand.map((c, i) => {
           const isSelected = selectedCard === c.instanceId;
+          const isBeingDragged = draggingCardId === c.instanceId;
           const cardData = getCard(c.cardId);
 
           // Check playability
@@ -56,7 +139,6 @@ export const HandTray: React.FC<Props> = ({
 
           const canPlaceArcana =
             isMyTurn &&
-            state.phase === 'ARCANA_PLACEMENT' &&
             !state.flags.hasPlacedArcanaThisTurn;
 
           // Slight rotation or curve for fan effect if multiple cards
@@ -68,9 +150,13 @@ export const HandTray: React.FC<Props> = ({
               style={{
                 zIndex: isSelected ? 60 : 10 + i,
               }}
-              className={`relative shrink-0 select-none group transition-all duration-200 ${
+              className={`relative shrink-0 select-none group transition-all duration-200 touch-none ${
                 i > 0 ? getOverlapMargin() : ''
-              }`}
+              } ${isBeingDragged ? 'opacity-20 pointer-events-none' : ''}`}
+              onPointerDown={(e) => handlePointerDown(c, e)}
+              onPointerMove={(e) => handlePointerMove(c, e)}
+              onPointerUp={(e) => handlePointerUp(c, e)}
+              onPointerCancel={(e) => handlePointerCancel(c, e)}
             >
               {/* Rising Card Container */}
               <div
@@ -86,8 +172,8 @@ export const HandTray: React.FC<Props> = ({
                     : 'hover:-translate-y-4 hover:scale-110 hover:z-40'
                 }`}
               >
-                {/* Action Buttons Bubble above Selected Card (Duel Masters Plays Style: IMG_9589) */}
-                {isSelected && (
+                {/* Action Buttons Bubble above Selected Card (Duel Masters Plays Style) */}
+                {isSelected && !isBeingDragged && (
                   <div
                     className="absolute -top-11 left-1/2 -translate-x-1/2 flex items-center space-x-1.5 z-50 whitespace-nowrap animate-in fade-in slide-in-from-bottom-2 duration-150"
                     onClick={(e) => e.stopPropagation()}
@@ -123,7 +209,7 @@ export const HandTray: React.FC<Props> = ({
                     )}
 
                     {/* Action 2: Arcana Placement Button */}
-                    {state.phase === 'ARCANA_PLACEMENT' && canPlaceArcana && (
+                    {canPlaceArcana && (
                       <button
                         type="button"
                         onClick={(e) => {
@@ -165,9 +251,6 @@ export const HandTray: React.FC<Props> = ({
                   playable={isPlayableNow || canPlaceArcana}
                   onClick={(e) => {
                     e.stopPropagation();
-                    const nextSel = isSelected ? '' : c.instanceId;
-                    onSelect(nextSel);
-                    if (nextSel) onInspect(cardData);
                   }}
                   onInspect={() => onInspect(cardData)}
                 />
@@ -179,4 +262,5 @@ export const HandTray: React.FC<Props> = ({
     </div>
   );
 };
+
 

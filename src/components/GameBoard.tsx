@@ -8,6 +8,7 @@ import { ActionControls } from './ActionControls';
 import { PlaymatSelector, PlaymatThemeId, PLAYMAT_THEMES } from './PlaymatSelector';
 import { ZoneViewerModal, ZoneSelectionConfig } from './ZoneViewerModal';
 import { QuickInspectPanel } from './QuickInspectPanel';
+import { AttackArrowOverlay } from './AttackArrowOverlay';
 import { getCard } from '../data/cards';
 import { calculateUnitStats, canPlayCard } from '../engine/engineUtils';
 import { canUnitGuard, isValidAttackTarget } from '../engine/combatEngine';
@@ -26,11 +27,46 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
   const [showLog, setShowLog] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
 
+  // Canvas Ref for accurate coordinate scaling
+  const canvasRef = useRef<HTMLDivElement>(null);
+
   // Animation States
   const [isScreenShaking, setIsScreenShaking] = useState(false);
   const [activeAttackerId, setActiveAttackerId] = useState<string | null>(null);
   const [summonRippleSlot, setSummonRippleSlot] = useState<{ isOpponent: boolean; slotIdx: number } | null>(null);
   const [cutinCard, setCutinCard] = useState<{ card: CardTemplate; title: string } | null>(null);
+
+  // Shield Break & Shatter Animations
+  const [shatteringOppShieldIdx, setShatteringOppShieldIdx] = useState<number | null>(null);
+  const [shatteringPlayerShieldIdx, setShatteringPlayerShieldIdx] = useState<number | null>(null);
+
+  // Hand Drag & Drop States (Play & Arcana Charge)
+  const [draggingCard, setDraggingCard] = useState<CardInstance | null>(null);
+  const [dragCanvasPos, setDragCanvasPos] = useState<{ x: number; y: number } | null>(null);
+  const [dragHoverZone, setDragHoverZone] = useState<'arcana' | 'field' | null>(null);
+
+  // Neon Attack Arrow Drag State
+  const [attackDrag, setAttackDrag] = useState<{
+    attackerId: string;
+    startX: number;
+    startY: number;
+    currentX: number;
+    currentY: number;
+    lockedTarget: {
+      type: 'unit' | 'player';
+      id?: string;
+      name: string;
+      snapX: number;
+      snapY: number;
+    } | null;
+  } | null>(null);
+
+  // Quick feedback toast
+  const [feedbackToast, setFeedbackToast] = useState<{ text: string; type: 'info' | 'warn' | 'success' } | null>(null);
+  const showToast = (text: string, type: 'info' | 'warn' | 'success' = 'info') => {
+    setFeedbackToast({ text, type });
+    setTimeout(() => setFeedbackToast(null), 1400);
+  };
 
   // Playmat Theme State
   const [playmatTheme, setPlaymatTheme] = useState<PlaymatThemeId>(() => {
@@ -111,6 +147,31 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
     prevLogLength.current = state.log.length;
   }, [state.log.length]);
 
+  // Track shield breaks to trigger glass shatter animations
+  const prevOppBarrier = useRef(opp.barrier);
+  useEffect(() => {
+    if (opp.barrier < prevOppBarrier.current) {
+      const brokenIdx = opp.barrier;
+      setShatteringOppShieldIdx(brokenIdx);
+      setIsScreenShaking(true);
+      setTimeout(() => setIsScreenShaking(false), 420);
+      setTimeout(() => setShatteringOppShieldIdx(null), 850);
+    }
+    prevOppBarrier.current = opp.barrier;
+  }, [opp.barrier]);
+
+  const prevPlayerBarrier = useRef(me.barrier);
+  useEffect(() => {
+    if (me.barrier < prevPlayerBarrier.current) {
+      const brokenIdx = me.barrier;
+      setShatteringPlayerShieldIdx(brokenIdx);
+      setIsScreenShaking(true);
+      setTimeout(() => setIsScreenShaking(false), 420);
+      setTimeout(() => setShatteringPlayerShieldIdx(null), 850);
+    }
+    prevPlayerBarrier.current = me.barrier;
+  }, [me.barrier]);
+
   const triggerCutin = (card: CardTemplate, title: string) => {
     setCutinCard({ card, title });
     setTimeout(() => {
@@ -121,6 +182,72 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
   const handleBoardClick = () => {
     setSelectedCardId(null);
     setArcanaMode(false);
+  };
+
+  // Convert client coordinates to 844x390 virtual arena canvas coordinates
+  const getCanvasCoords = (clientX: number, clientY: number) => {
+    if (!canvasRef.current) return { x: clientX, y: clientY };
+    const rect = canvasRef.current.getBoundingClientRect();
+    return {
+      x: (clientX - rect.left) / scale,
+      y: (clientY - rect.top) / scale,
+    };
+  };
+
+  // Hand Card Drag Handlers (Play & Arcana Charge)
+  const handleCardDragStart = (card: CardInstance, clientX: number, clientY: number) => {
+    const coords = getCanvasCoords(clientX, clientY);
+    setDraggingCard(card);
+    setDragCanvasPos(coords);
+  };
+
+  const handleCardDragMove = (clientX: number, clientY: number) => {
+    const coords = getCanvasCoords(clientX, clientY);
+    setDragCanvasPos(coords);
+
+    // 1. Check Arcana Gauge drop zone in bottom-left (approx x: 45, y: 350, r: 65)
+    const arcanaDist = Math.hypot(coords.x - 45, coords.y - 350);
+    if (arcanaDist < 65) {
+      setDragHoverZone('arcana');
+      return;
+    }
+
+    // 2. Check Field Arena drop zone (Y < 275 and Y > 40 and X > 70 and X < 770)
+    if (coords.y < 275 && coords.y > 40 && coords.x > 70 && coords.x < 770) {
+      setDragHoverZone('field');
+      return;
+    }
+
+    setDragHoverZone(null);
+  };
+
+  const handleCardDragEnd = (card: CardInstance, clientX: number, clientY: number) => {
+    const coords = getCanvasCoords(clientX, clientY);
+    const arcanaDist = Math.hypot(coords.x - 45, coords.y - 350);
+
+    if (arcanaDist < 65) {
+      // Dropped onto Arcana Gauge
+      if (!state.flags.hasPlacedArcanaThisTurn && isMyTurn) {
+        dispatch({ type: 'PLACE_ARCANA', instanceId: card.instanceId });
+        showToast('⚡ アルカナ充填！ (+1 ARCANA)', 'success');
+        setSelectedCardId(null);
+      } else {
+        showToast('今ターンはすでにアルカナを充填済みです', 'warn');
+      }
+    } else if (coords.y < 275 && coords.y > 40 && coords.x > 70 && coords.x < 770) {
+      // Dropped onto Field Arena
+      const tpl = getCard(card.cardId);
+      const playable = isMyTurn && state.phase === 'ACTION' && canPlayCard(tpl, me.currentArcana, me.arcana, me.field.length);
+      if (playable) {
+        handlePlayHandCard(card.instanceId);
+      } else {
+        showToast('アルカナまたは条件が足りません', 'warn');
+      }
+    }
+
+    setDraggingCard(null);
+    setDragCanvasPos(null);
+    setDragHoverZone(null);
   };
 
   // Helper to test if a target is valid for currently selected card or spell
@@ -172,7 +299,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
     state.phase === 'ACTION' &&
     canPlayCard(getCard(selectedHandCard.cardId), me.currentArcana, me.arcana, me.field.length);
 
-  // Derive inspected card data for Duel Masters top-left popup window (IMG_9589)
+  // Derive inspected card data for Duel Masters top-left popup window
   const inspectedCardData = selectedCardId
     ? (me.hand.find(c => c.instanceId === selectedCardId)
       ? getCard(me.hand.find(c => c.instanceId === selectedCardId)!.cardId)
@@ -200,6 +327,124 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
       setActiveAttackerId(null);
       dispatch({ type: 'DECLARE_ATTACK', attackerId, targetId });
     }, 200);
+  };
+
+  // Unit Attack Pointer Drag Handlers
+  const handleUnitAttackPointerDown = (unit: UnitState, slotIdx: number, e: React.PointerEvent) => {
+    if (!isMyTurn || state.phase !== 'ACTION' || unit.isRested || unit.hasSummoningSickness) return;
+    e.stopPropagation();
+
+    // Calculate slot center in canvas coordinates
+    let startX = 232 + slotIdx * 76;
+    let startY = 240;
+    const slotEl = document.getElementById(`me-slot-${slotIdx}`);
+    if (slotEl && canvasRef.current) {
+      const slotRect = slotEl.getBoundingClientRect();
+      const canvasRect = canvasRef.current.getBoundingClientRect();
+      startX = (slotRect.left + slotRect.width / 2 - canvasRect.left) / scale;
+      startY = (slotRect.top + slotRect.height / 2 - canvasRect.top) / scale;
+    }
+
+    const currentCoords = getCanvasCoords(e.clientX, e.clientY);
+    setAttackDrag({
+      attackerId: unit.instanceId,
+      startX,
+      startY,
+      currentX: currentCoords.x,
+      currentY: currentCoords.y,
+      lockedTarget: null,
+    });
+    setSelectedCardId(unit.instanceId);
+  };
+
+  const handleGlobalPointerMove = (e: React.PointerEvent) => {
+    if (draggingCard) {
+      handleCardDragMove(e.clientX, e.clientY);
+      return;
+    }
+
+    if (!attackDrag) return;
+    const coords = getCanvasCoords(e.clientX, e.clientY);
+
+    // Find closest valid target for lock-on
+    let locked: {
+      type: 'unit' | 'player';
+      id?: string;
+      name: string;
+      snapX: number;
+      snapY: number;
+    } | null = null;
+
+    let minTargetDist = 52; // lock-on threshold distance
+
+    // 1. Check opponent units
+    opp.field.forEach((oppUnit, idx) => {
+      const slotEl = document.getElementById(`opp-slot-${idx}`);
+      let ux = 232 + idx * 76;
+      let uy = 135;
+      if (slotEl && canvasRef.current) {
+        const slotRect = slotEl.getBoundingClientRect();
+        const canvasRect = canvasRef.current.getBoundingClientRect();
+        ux = (slotRect.left + slotRect.width / 2 - canvasRect.left) / scale;
+        uy = (slotRect.top + slotRect.height / 2 - canvasRect.top) / scale;
+      }
+
+      const dist = Math.hypot(coords.x - ux, coords.y - uy);
+      if (dist < minTargetDist && isValidAttackTarget(state, attackDrag.attackerId, oppUnit.instanceId)) {
+        minTargetDist = dist;
+        locked = {
+          type: 'unit',
+          id: oppUnit.instanceId,
+          name: getCard(oppUnit.cards[0].cardId).name,
+          snapX: ux,
+          snapY: uy,
+        };
+      }
+    });
+
+    // 2. Check opponent avatar / floor shields for direct attack
+    if (!locked && isValidAttackTarget(state, attackDrag.attackerId, undefined)) {
+      const oppCenter = { x: 422, y: 55 };
+      const distToOpp = Math.hypot(coords.x - oppCenter.x, coords.y - oppCenter.y);
+      if (distToOpp < 65 || coords.y < 80) {
+        locked = {
+          type: 'player',
+          name: 'DIRECT ATTACK',
+          snapX: oppCenter.x,
+          snapY: oppCenter.y,
+        };
+      }
+    }
+
+    setAttackDrag(prev => prev ? {
+      ...prev,
+      currentX: locked ? locked.snapX : coords.x,
+      currentY: locked ? locked.snapY : coords.y,
+      lockedTarget: locked,
+    } : null);
+  };
+
+  const handleGlobalPointerUp = (e: React.PointerEvent) => {
+    if (draggingCard) {
+      handleCardDragEnd(draggingCard, e.clientX, e.clientY);
+      return;
+    }
+
+    if (!attackDrag) return;
+    if (attackDrag.lockedTarget) {
+      performAttackAnimation(
+        attackDrag.attackerId,
+        attackDrag.lockedTarget.type === 'unit' ? attackDrag.lockedTarget.id : undefined
+      );
+      showToast(
+        attackDrag.lockedTarget.type === 'player'
+          ? '⚔️ ダイレクトアタック！'
+          : `⚔️ 【${attackDrag.lockedTarget.name}】へ攻撃！`,
+        'success'
+      );
+      setSelectedCardId(null);
+    }
+    setAttackDrag(null);
   };
 
   const handleOpponentDirectAttack = (e?: React.MouseEvent) => {
@@ -400,14 +645,19 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
       {/* Auto-Fit Scaled Canvas: strictly 844px x 390px (iPhone 13 Landscape viewport) */}
       <div
         id="gameboard-canvas"
+        ref={canvasRef}
+        onPointerMove={handleGlobalPointerMove}
+        onPointerUp={handleGlobalPointerUp}
+        onPointerCancel={handleGlobalPointerUp}
         style={{
           width: '844px',
           height: '390px',
           transform: `scale(${scale})`,
           transformOrigin: 'center center',
+          touchAction: 'none',
           ...currentTheme.bgStyle,
         }}
-        className={`relative shrink-0 overflow-hidden flex flex-col justify-between text-slate-100 font-sans shadow-2xl transition-colors duration-500 ${
+        className={`relative shrink-0 overflow-hidden flex flex-col justify-between text-slate-100 font-sans shadow-2xl transition-colors duration-500 select-none ${
           isScreenShaking ? 'animate-screen-shake' : ''
         }`}
       >
@@ -466,26 +716,34 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
           })}
         </div>
 
-        {/* Top-Center: Opponent Avatar (Direct Attack targetable when canDirectAttack) */}
+        {/* Top-Center: Opponent Avatar (Direct Attack targetable or lock-on target) */}
         <div className="absolute top-1.5 left-1/2 -translate-x-1/2 z-30 pointer-events-auto select-none">
-          <button
-            type="button"
-            disabled={!canDirectAttack}
-            onClick={handleOpponentDirectAttack}
-            className={`flex items-center space-x-1.5 px-3 py-1 rounded-full border backdrop-blur-md shadow-xl transition-all ${
-              canDirectAttack
-                ? 'bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 border-yellow-200 text-slate-950 ring-2 ring-yellow-300 animate-bounce cursor-pointer shadow-[0_0_20px_rgba(250,204,21,1)]'
-                : 'bg-slate-950/80 border-red-500/40 text-slate-200'
-            }`}
-            title={canDirectAttack ? '相手プレイヤーにダイレクトアタック！' : '相手プレイヤー'}
-          >
-            <div className="w-5 h-5 rounded-full bg-gradient-to-br from-red-700 to-indigo-900 border border-amber-300 flex items-center justify-center shadow">
-              <User size={11} className={canDirectAttack ? 'text-slate-950' : 'text-yellow-200'} />
-            </div>
-            <span className="text-[9.5px] font-black tracking-tight uppercase">
-              {canDirectAttack ? 'DIRECT ATTACK!' : 'OPPONENT'}
-            </span>
-          </button>
+          {(() => {
+            const isLocked = attackDrag?.lockedTarget?.type === 'player';
+            const isClickable = canDirectAttack || isLocked;
+            return (
+              <button
+                type="button"
+                disabled={!isClickable}
+                onClick={handleOpponentDirectAttack}
+                className={`flex items-center space-x-1.5 px-3 py-1 rounded-full border backdrop-blur-md shadow-xl transition-all ${
+                  isLocked
+                    ? 'bg-gradient-to-r from-red-500 via-yellow-400 to-amber-500 border-yellow-200 text-slate-950 ring-4 ring-yellow-400 shadow-[0_0_30px_rgba(250,204,21,1)] scale-110'
+                    : canDirectAttack
+                      ? 'bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 border-yellow-200 text-slate-950 ring-2 ring-yellow-300 animate-bounce cursor-pointer shadow-[0_0_20px_rgba(250,204,21,1)]'
+                      : 'bg-slate-950/80 border-red-500/40 text-slate-200'
+                }`}
+                title={isClickable ? '相手プレイヤーにダイレクトアタック！' : '相手プレイヤー'}
+              >
+                <div className="w-5 h-5 rounded-full bg-gradient-to-br from-red-700 to-indigo-900 border border-amber-300 flex items-center justify-center shadow">
+                  <User size={11} className={isClickable ? 'text-slate-950' : 'text-yellow-200'} />
+                </div>
+                <span className="text-[9.5px] font-black tracking-tight uppercase">
+                  {isLocked ? 'TARGET LOCKED!' : canDirectAttack ? 'DIRECT ATTACK!' : 'OPPONENT'}
+                </span>
+              </button>
+            );
+          })()}
         </div>
 
         {/* Top-Right: Opponent CARD COUNT & Circular Mana Zone (Duel Masters Symmetrical Layout) */}
@@ -650,27 +908,40 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
           <div className="w-full flex items-center justify-center space-x-2 py-0.5 pointer-events-auto">
             {Array.from({ length: 5 }).map((_, idx) => {
               const active = idx < opp.barrier;
+              const isShattering = shatteringOppShieldIdx === idx;
               return (
-                <button
-                  type="button"
-                  key={`opp-floor-shield-${idx}`}
-                  disabled={!canDirectAttack}
-                  onClick={handleOpponentDirectAttack}
-                  className={`w-6 h-8 rounded-sm border transition-all duration-300 flex items-center justify-center select-none ${
-                    active
-                      ? canDirectAttack
-                        ? 'bg-gradient-to-b from-amber-400 via-yellow-400 to-amber-600 border-yellow-200 shadow-[0_0_12px_rgba(250,204,21,1)] cursor-pointer animate-pulse scale-105'
-                        : 'bg-gradient-to-b from-cyan-400 via-sky-500 to-blue-700 border-cyan-200 shadow-[0_0_8px_rgba(34,211,238,0.7)]'
-                      : 'bg-slate-900/40 border-slate-700/20 opacity-20'
-                  }`}
-                  title={canDirectAttack ? '相手シールドへ直接攻撃！' : `相手シールド ${idx + 1}/5`}
-                >
-                  {active && (
-                    <div className="w-3.5 h-5 rounded-xs border border-white/40 bg-white/20 shadow-inner flex items-center justify-center">
-                      <Shield size={8} className={canDirectAttack ? 'text-slate-950 fill-current' : 'text-cyan-100 fill-cyan-100'} />
+                <div key={`opp-floor-shield-wrap-${idx}`} className="relative">
+                  <button
+                    type="button"
+                    disabled={!canDirectAttack}
+                    onClick={handleOpponentDirectAttack}
+                    className={`w-6 h-8 rounded-sm border transition-all duration-300 flex items-center justify-center select-none ${
+                      active
+                        ? canDirectAttack
+                          ? 'bg-gradient-to-b from-amber-400 via-yellow-400 to-amber-600 border-yellow-200 shadow-[0_0_12px_rgba(250,204,21,1)] cursor-pointer animate-pulse scale-105'
+                          : 'bg-gradient-to-b from-cyan-400 via-sky-500 to-blue-700 border-cyan-200 shadow-[0_0_8px_rgba(34,211,238,0.7)]'
+                        : 'bg-slate-900/40 border-slate-700/20 opacity-20'
+                    }`}
+                    title={canDirectAttack ? '相手シールドへ直接攻撃！' : `相手シールド ${idx + 1}/5`}
+                  >
+                    {active && (
+                      <div className="w-3.5 h-5 rounded-xs border border-white/40 bg-white/20 shadow-inner flex items-center justify-center">
+                        <Shield size={8} className={canDirectAttack ? 'text-slate-950 fill-current' : 'text-cyan-100 fill-cyan-100'} />
+                      </div>
+                    )}
+                  </button>
+
+                  {/* Shield Break Glass Shatter Effect */}
+                  {isShattering && (
+                    <div className="absolute inset-0 pointer-events-none z-50 flex items-center justify-center">
+                      <div className="w-full h-full bg-cyan-300 rounded animate-shield-break shadow-[0_0_20px_rgba(34,211,238,1)]" />
+                      <div className="absolute w-2 h-2 bg-cyan-100 rounded-xs animate-shatter-shard" style={{ '--tw-shatter-x': '-28px', '--tw-shatter-y': '-22px', '--tw-shatter-r': '-80deg' } as any} />
+                      <div className="absolute w-2.5 h-1.5 bg-yellow-200 rounded-xs animate-shatter-shard" style={{ '--tw-shatter-x': '26px', '--tw-shatter-y': '-26px', '--tw-shatter-r': '90deg' } as any} />
+                      <div className="absolute w-1.5 h-2.5 bg-white rounded-xs animate-shatter-shard" style={{ '--tw-shatter-x': '-20px', '--tw-shatter-y': '24px', '--tw-shatter-r': '45deg' } as any} />
+                      <div className="absolute w-2 h-2 bg-sky-300 rounded-xs animate-shatter-shard" style={{ '--tw-shatter-x': '24px', '--tw-shatter-y': '20px', '--tw-shatter-r': '-60deg' } as any} />
                     </div>
                   )}
-                </button>
+                </div>
               );
             })}
           </div>
@@ -681,6 +952,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
               const unit = opp.field[slotIdx];
               const stats = unit ? calculateUnitStats(state, 'player2', unit) : null;
               const isTarget = unit ? isTargetValidForSelected('unit', unit) : false;
+              const isLockedTarget = unit && attackDrag?.lockedTarget?.id === unit.instanceId;
               const isAttacking = unit && activeAttackerId === unit.instanceId;
               const hasRipple = summonRippleSlot?.isOpponent && summonRippleSlot.slotIdx === slotIdx;
 
@@ -693,9 +965,11 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
                       ? 'overflow-visible'
                       : 'border border-cyan-500/15 bg-cyan-950/10 shadow-inner'
                   } ${
-                    isTarget
-                      ? 'ring-2 ring-yellow-400 shadow-lg shadow-yellow-400/60 cursor-pointer animate-pulse z-30'
-                      : ''
+                    isLockedTarget
+                      ? 'ring-4 ring-yellow-400 shadow-[0_0_25px_rgba(250,204,21,1)] scale-105 cursor-pointer z-40'
+                      : isTarget
+                        ? 'ring-2 ring-yellow-400 shadow-lg shadow-yellow-400/60 cursor-pointer animate-pulse z-30'
+                        : ''
                   } ${isAttacking ? 'animate-attack-dash z-40' : ''}`}
                   onClick={(e) => unit && handleCardClick(unit.instanceId, e)}
                 >
@@ -740,6 +1014,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
               const stats = unit ? calculateUnitStats(state, 'player1', unit) : null;
               const isSelected = unit && selectedCardId === unit.instanceId;
               const isAttackerReady = unit && isMyTurn && state.phase === 'ACTION' && !unit.isRested && !unit.hasSummoningSickness;
+              const isDraggingThisAttacker = unit && attackDrag?.attackerId === unit.instanceId;
               const isAttacking = unit && activeAttackerId === unit.instanceId;
               const hasRipple = !summonRippleSlot?.isOpponent && summonRippleSlot?.slotIdx === slotIdx;
 
@@ -747,6 +1022,11 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
                 <div
                   key={unit ? unit.instanceId : `me-slot-${slotIdx}`}
                   id={`me-slot-${slotIdx}`}
+                  onPointerDown={(e) => {
+                    if (unit) {
+                      handleUnitAttackPointerDown(unit, slotIdx, e);
+                    }
+                  }}
                   onClick={(e) => {
                     if (unit) {
                       handleCardClick(unit.instanceId, e);
@@ -760,6 +1040,10 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
                       : isSelectedHandPlayable
                         ? 'border-2 border-emerald-400 bg-emerald-950/40 cursor-pointer shadow-lg shadow-emerald-500/40 animate-pulse'
                         : 'border border-cyan-500/15 bg-cyan-950/10 shadow-inner'
+                  } ${
+                    isDraggingThisAttacker
+                      ? 'ring-4 ring-amber-400 scale-105 shadow-[0_0_25px_rgba(245,158,11,1)] z-40'
+                      : ''
                   } ${isAttacking ? 'animate-attack-dash z-40' : ''}`}
                 >
                   {hasRipple && (
@@ -796,18 +1080,31 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
           <div className="w-full flex items-center justify-center space-x-2 py-0.5 pointer-events-none">
             {Array.from({ length: 5 }).map((_, idx) => {
               const active = idx < me.barrier;
+              const isShattering = shatteringPlayerShieldIdx === idx;
               return (
-                <div
-                  key={`me-floor-shield-${idx}`}
-                  className={`w-6 h-8 rounded-sm border transition-all duration-300 flex items-center justify-center ${
-                    active
-                      ? 'bg-gradient-to-b from-cyan-400 via-sky-500 to-blue-700 border-cyan-200 shadow-[0_0_8px_rgba(34,211,238,0.7)]'
-                      : 'bg-slate-900/40 border-slate-700/20 opacity-20'
-                  }`}
-                >
-                  {active && (
-                    <div className="w-3.5 h-5 rounded-xs border border-white/40 bg-white/20 shadow-inner flex items-center justify-center">
-                      <Shield size={8} className="text-cyan-100 fill-cyan-100" />
+                <div key={`me-floor-shield-wrap-${idx}`} className="relative">
+                  <div
+                    className={`w-6 h-8 rounded-sm border transition-all duration-300 flex items-center justify-center ${
+                      active
+                        ? 'bg-gradient-to-b from-cyan-400 via-sky-500 to-blue-700 border-cyan-200 shadow-[0_0_8px_rgba(34,211,238,0.7)]'
+                        : 'bg-slate-900/40 border-slate-700/20 opacity-20'
+                    }`}
+                  >
+                    {active && (
+                      <div className="w-3.5 h-5 rounded-xs border border-white/40 bg-white/20 shadow-inner flex items-center justify-center">
+                        <Shield size={8} className="text-cyan-100 fill-cyan-100" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Player Shield Break Glass Shatter Effect */}
+                  {isShattering && (
+                    <div className="absolute inset-0 pointer-events-none z-50 flex items-center justify-center">
+                      <div className="w-full h-full bg-red-400 rounded animate-shield-break shadow-[0_0_20px_rgba(239,68,68,1)]" />
+                      <div className="absolute w-2 h-2 bg-red-200 rounded-xs animate-shatter-shard" style={{ '--tw-shatter-x': '-28px', '--tw-shatter-y': '-22px', '--tw-shatter-r': '-80deg' } as any} />
+                      <div className="absolute w-2.5 h-1.5 bg-yellow-200 rounded-xs animate-shatter-shard" style={{ '--tw-shatter-x': '26px', '--tw-shatter-y': '-26px', '--tw-shatter-r': '90deg' } as any} />
+                      <div className="absolute w-1.5 h-2.5 bg-white rounded-xs animate-shatter-shard" style={{ '--tw-shatter-x': '-20px', '--tw-shatter-y': '24px', '--tw-shatter-r': '45deg' } as any} />
+                      <div className="absolute w-2 h-2 bg-amber-300 rounded-xs animate-shatter-shard" style={{ '--tw-shatter-x': '24px', '--tw-shatter-y': '20px', '--tw-shatter-r': '-60deg' } as any} />
                     </div>
                   )}
                 </div>
@@ -820,22 +1117,28 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
         {/* 4. BOTTOM-LEFT: Circular Mana Zone, DECK & ARCHIVE Panel, Player Avatar   */}
         {/* ========================================================================= */}
         <div className="absolute bottom-1.5 left-2.5 z-40 flex items-center space-x-2 pointer-events-auto select-none">
-          {/* 3D Circular Arcana Orb (diameter ~64px) */}
-          <ArcanaGauge
-            current={me.currentArcana}
-            max={me.maxArcana}
-            arcanaCards={me.arcana}
-            onOpenArcana={() =>
-              setZoneModal({
-                isOpen: true,
-                title: '自分のアルカナゾーン',
-                zoneType: 'arcana',
-                cards: me.arcana,
-                isOpponent: false,
-              })
-            }
-            isOpponent={false}
-          />
+          {/* 3D Circular Arcana Orb with Drop Zone Attraction Effect */}
+          <div className={`relative transition-all duration-200 ${
+            dragHoverZone === 'arcana'
+              ? 'scale-115 ring-4 ring-amber-400 shadow-[0_0_35px_rgba(245,158,11,1)] rounded-full animate-pulse'
+              : ''
+          }`}>
+            <ArcanaGauge
+              current={me.currentArcana}
+              max={me.maxArcana}
+              arcanaCards={me.arcana}
+              onOpenArcana={() =>
+                setZoneModal({
+                  isOpen: true,
+                  title: '自分のアルカナゾーン',
+                  zoneType: 'arcana',
+                  cards: me.arcana,
+                  isOpponent: false,
+                })
+              }
+              isOpponent={false}
+            />
+          </div>
 
           {/* Player DECK & ARCHIVE Panel (Duel Masters Metallic Cyan CARD COUNT: IMG_9587) */}
           <div className="flex flex-col items-start select-none">
@@ -916,7 +1219,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
         </div>
 
         {/* ========================================================================= */}
-        {/* 6. BOTTOM-RIGHT: Hand Tray (Right-Aligned Fan Overlap)                    */}
+        {/* 6. BOTTOM-RIGHT: Hand Tray (Right-Aligned Fan Overlap with Drag & Drop)    */}
         {/* ========================================================================= */}
         <div className="absolute bottom-1 right-2 z-30 pointer-events-auto">
           <HandTray
@@ -928,8 +1231,97 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
             onInspect={onInspect}
             onPlayCard={handlePlayHandCard}
             onArcanaPlace={handlePlaceHandArcana}
+            onCardDragStart={handleCardDragStart}
+            onCardDragMove={handleCardDragMove}
+            onCardDragEnd={handleCardDragEnd}
+            draggingCardId={draggingCard?.instanceId}
           />
         </div>
+
+        {/* ========================================================================= */}
+        {/* NEON SVG ATTACK ARROW OVERLAY                                             */}
+        {/* ========================================================================= */}
+        {attackDrag && (
+          <AttackArrowOverlay
+            startX={attackDrag.startX}
+            startY={attackDrag.startY}
+            currentX={attackDrag.currentX}
+            currentY={attackDrag.currentY}
+            lockedTarget={attackDrag.lockedTarget}
+          />
+        )}
+
+        {/* ========================================================================= */}
+        {/* FLOATING DRAGGED HAND CARD PREVIEW                                        */}
+        {/* ========================================================================= */}
+        {draggingCard && dragCanvasPos && (
+          <div
+            className="absolute pointer-events-none z-50 flex flex-col items-center"
+            style={{
+              left: `${dragCanvasPos.x}px`,
+              top: `${dragCanvasPos.y}px`,
+              transform: 'translate(-50%, -70%) scale(1.08)',
+            }}
+          >
+            {/* Gesture Action Indicator Badge */}
+            {dragHoverZone === 'arcana' ? (
+              <div className="mb-1 px-2.5 py-0.5 rounded-full bg-amber-500 text-slate-950 font-black text-[9px] shadow-[0_0_15px_rgba(245,158,11,1)] flex items-center space-x-1 animate-bounce">
+                <Zap size={10} className="fill-current" />
+                <span>アルカナ充填 (+1 ARCANA)</span>
+              </div>
+            ) : dragHoverZone === 'field' ? (
+              <div className={`mb-1 px-2.5 py-0.5 rounded-full text-white font-black text-[9px] shadow-lg flex items-center space-x-1 animate-pulse ${
+                canPlayCard(getCard(draggingCard.cardId), me.currentArcana, me.arcana, me.field.length)
+                  ? 'bg-emerald-600 shadow-emerald-500/80'
+                  : 'bg-red-600 shadow-red-500/80'
+              }`}>
+                <span>
+                  {canPlayCard(getCard(draggingCard.cardId), me.currentArcana, me.arcana, me.field.length)
+                    ? '⇧ プレイ (召喚/発動)'
+                    : '✕ アルカナ不足'}
+                </span>
+              </div>
+            ) : null}
+
+            {/* Glowing Card Miniature */}
+            <div className="w-[68px] h-[92px] rounded-lg shadow-[0_10px_25px_rgba(0,0,0,0.85)] ring-2 ring-cyan-300">
+              <CardView
+                instance={draggingCard}
+                size="field"
+                isDragging
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* RUNE TRIGGER DARKENING CUT-IN OVERLAY                                     */}
+        {/* ========================================================================= */}
+        {state.prompt?.type === 'RUNE_TRIGGER' && (
+          <div className="absolute inset-0 pointer-events-none z-40 bg-black/75 animate-rune-darken flex flex-col items-center justify-center">
+            <div className="px-4 py-1.5 rounded-full bg-gradient-to-r from-red-600 via-amber-500 to-yellow-400 text-slate-950 font-black text-xs tracking-widest uppercase shadow-[0_0_30px_rgba(245,158,11,1)] animate-bounce mb-2">
+              ⚡ RUNE TRIGGER! 最優先割り込み ⚡
+            </div>
+            <p className="text-[10px] text-amber-200 font-bold">結界より秘術が解き放たれました！</p>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* QUICK FEEDBACK TOAST                                                      */}
+        {/* ========================================================================= */}
+        {feedbackToast && (
+          <div className="absolute top-10 left-1/2 -translate-x-1/2 z-50 pointer-events-none animate-in fade-in zoom-in-95 duration-150">
+            <div className={`px-3 py-1 rounded-full font-black text-[10px] shadow-2xl border flex items-center space-x-1.5 ${
+              feedbackToast.type === 'success'
+                ? 'bg-emerald-950/90 border-emerald-400 text-emerald-200 shadow-[0_0_20px_rgba(16,185,129,0.7)]'
+                : feedbackToast.type === 'warn'
+                  ? 'bg-amber-950/90 border-amber-400 text-amber-200 shadow-[0_0_20px_rgba(245,158,11,0.7)]'
+                  : 'bg-slate-900/90 border-cyan-400 text-cyan-200 shadow-[0_0_20px_rgba(6,182,212,0.7)]'
+            }`}>
+              <span>{feedbackToast.text}</span>
+            </div>
+          </div>
+        )}
 
         {/* ========================================================================= */}
         {/* 7. HAMBURGER MENU DRAWER / MODAL                                          */}

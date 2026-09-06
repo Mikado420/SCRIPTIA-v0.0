@@ -1,27 +1,24 @@
 import React from 'react';
 import { Phase } from '../types';
-import { ChevronRight, Zap, Loader2, Layers, Archive } from 'lucide-react';
+import { ChevronRight, Loader2 } from 'lucide-react';
 
 interface Props {
   phase: Phase;
   turnCount: number;
   isMyTurn: boolean;
-  hasPlacedArcanaThisTurn: boolean;
+  hasPlacedArcanaThisTurn?: boolean;
   hasPrompt: boolean;
-  selectedCardId: string | null;
-  isHandSelected: boolean;
+  selectedCardId?: string | null;
+  isHandSelected?: boolean;
   onNextPhase: () => void;
-  onArcanaCharge: () => void;
+  onArcanaCharge?: () => void;
 }
 
 export const ActionControls: React.FC<Props> = ({
   phase,
   isMyTurn,
-  hasPlacedArcanaThisTurn,
   hasPrompt,
-  isHandSelected,
   onNextPhase,
-  onArcanaCharge,
 }) => {
   const canAct = isMyTurn && !hasPrompt;
 
@@ -78,22 +75,6 @@ export const ActionControls: React.FC<Props> = ({
           </span>
         )}
       </button>
-
-      {/* Secondary Row: Quick Arcana Charge Button (in Arcana Phase) */}
-      {phase === 'ARCANA_PLACEMENT' && isMyTurn && !hasPlacedArcanaThisTurn && (
-        <button
-          type="button"
-          onClick={onArcanaCharge}
-          className={`w-full py-1 rounded-lg font-black text-[9px] transition-all shadow-md active:scale-95 flex items-center justify-center space-x-1 border shrink-0 cursor-pointer ${
-            isHandSelected
-              ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white border-blue-300 ring-2 ring-blue-400 animate-pulse'
-              : 'bg-blue-950/90 hover:bg-blue-900 text-blue-200 border-blue-500/60'
-          }`}
-        >
-          <Zap size={10} className="text-yellow-300 fill-yellow-300" />
-          <span>{isHandSelected ? 'チャージ決定' : 'アルカナ充填'}</span>
-        </button>
-      )}
     </div>
   );
 };

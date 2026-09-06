@@ -11,7 +11,7 @@ export const calculateUnitStats = (state: GameState, playerId: string, unit: Uni
   let brk = tpl.brk || 0;
 
   // Apply modifiers
-  unit.modifiers.forEach(m => {
+  unit.modifiers?.forEach(m => {
     atk += m.atk;
     def += m.def;
     brk += m.brk;
