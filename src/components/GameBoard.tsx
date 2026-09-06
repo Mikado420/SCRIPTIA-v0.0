@@ -263,8 +263,14 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
 
   return (
     <div
-      className="relative w-full h-full text-slate-100 font-sans select-none overflow-hidden flex flex-col justify-between transition-colors duration-500"
-      style={currentTheme.bgStyle}
+      className="fixed inset-0 w-full h-full text-slate-100 font-sans select-none overflow-hidden flex flex-col justify-between transition-colors duration-500 min-h-0 min-w-0"
+      style={{
+        ...currentTheme.bgStyle,
+        paddingTop: 'max(8px, env(safe-area-inset-top, 0px))',
+        paddingBottom: 'max(8px, env(safe-area-inset-bottom, 0px))',
+        paddingLeft: 'max(12px, env(safe-area-inset-left, 0px))',
+        paddingRight: 'max(12px, env(safe-area-inset-right, 0px))',
+      }}
       onClick={handleBoardClick}
     >
       {/* Center Mystic Sigil Glow */}
@@ -280,7 +286,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
       {/* ========================================================================= */}
       {/* 1. TOP TIER: Opponent HUD, Barrier & Hand (Duel Masters Plays Style)       */}
       {/* ========================================================================= */}
-      <div className="relative w-full flex items-start justify-between px-3 pt-1 z-30 pointer-events-none">
+      <div className="relative w-full flex items-start justify-between z-30 pointer-events-none shrink-0 min-h-0">
         {/* Top-Left: Opponent Arcana & Deck/Archive Gauge */}
         <div className="pointer-events-auto">
           <ArcanaGauge
@@ -314,28 +320,28 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
         {/* Top-Center: Opponent Avatar, Hand & Floating Barrier Array */}
         <div className="flex flex-col items-center pointer-events-auto">
           {/* Opponent Hand: docked directly to top edge */}
-          <div className="flex items-start justify-center -space-x-2 pb-1">
+          <div className="flex items-start justify-center -space-x-2 pb-0.5">
             {opp.hand.map(c => (
               <CardView key={c.instanceId} size="opponent-hand" isFaceDown />
             ))}
           </div>
 
           {/* Opponent Avatar & Floating Barrier Plates */}
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-1.5 sm:space-x-2">
             {/* Opponent Avatar Crest */}
             <div
               onClick={handleOpponentDirectAttack}
-              className={`flex items-center space-x-1.5 px-2 py-1 rounded-full border transition-all cursor-pointer ${
+              className={`flex items-center space-x-1 sm:space-x-1.5 px-2 py-0.5 sm:py-1 rounded-full border transition-all cursor-pointer ${
                 canDirectAttack
                   ? 'border-red-500 bg-red-950/80 shadow-lg shadow-red-500/50 scale-105 ring-2 ring-red-400 animate-pulse'
                   : 'border-white/10 bg-black/60'
               }`}
               title={canDirectAttack ? '相手を直接攻撃！' : '相手プレイヤー'}
             >
-              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-red-700 to-slate-900 border border-red-400 flex items-center justify-center shadow">
-                <span className="text-[9px] font-black text-red-200">OPP</span>
+              <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-gradient-to-br from-red-700 to-slate-900 border border-red-400 flex items-center justify-center shadow">
+                <span className="text-[8px] sm:text-[9px] font-black text-red-200">OPP</span>
               </div>
-              <span className="text-[10px] font-black text-slate-300">OPPONENT</span>
+              <span className="text-[9px] sm:text-[10px] font-black text-slate-300">OPPONENT</span>
             </div>
 
             {/* Floating Barrier Hexagonal Plates */}
@@ -350,26 +356,26 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
         </div>
 
         {/* Top-Right: Opponent Runes & Domain Pedestals */}
-        <div className="flex items-center space-x-1.5 pointer-events-auto bg-black/40 backdrop-blur-sm p-1 rounded-xl border border-white/10">
-          <div className="text-[7.5px] font-black text-slate-400 px-1 uppercase tracking-tight">RUNE</div>
+        <div className="flex items-center space-x-1 sm:space-x-1.5 pointer-events-auto bg-black/40 backdrop-blur-sm p-1 rounded-xl border border-white/10">
+          <div className="text-[7px] sm:text-[7.5px] font-black text-slate-400 px-0.5 sm:px-1 uppercase tracking-tight">RUNE</div>
           {opp.runes[0] ? (
             <CardView isFaceDown size="compact" onClick={(e) => handleCardClick(opp.runes[0].instanceId, e)} />
           ) : (
-            <div className="w-[44px] h-[34px] border border-dashed border-white/10 rounded flex items-center justify-center text-[7.5px] text-white/20">空</div>
+            <div className="w-[38px] h-[28px] sm:w-[44px] sm:h-[34px] border border-dashed border-white/10 rounded flex items-center justify-center text-[7.5px] text-white/20">空</div>
           )}
           {opp.runes[1] ? (
             <CardView isFaceDown size="compact" onClick={(e) => handleCardClick(opp.runes[1].instanceId, e)} />
           ) : (
-            <div className="w-[44px] h-[34px] border border-dashed border-white/10 rounded flex items-center justify-center text-[7.5px] text-white/20">空</div>
+            <div className="w-[38px] h-[28px] sm:w-[44px] sm:h-[34px] border border-dashed border-white/10 rounded flex items-center justify-center text-[7.5px] text-white/20">空</div>
           )}
 
-          <div className="h-6 w-px bg-white/10 mx-0.5" />
+          <div className="h-5 sm:h-6 w-px bg-white/10 mx-0.5" />
 
-          <div className="text-[7.5px] font-black text-slate-400 px-1 uppercase tracking-tight">DOM</div>
+          <div className="text-[7px] sm:text-[7.5px] font-black text-slate-400 px-0.5 sm:px-1 uppercase tracking-tight">DOM</div>
           {opp.domain ? (
             <CardView instance={opp.domain} size="compact" onInspect={() => onInspect(getCard(opp.domain!.cardId))} />
           ) : (
-            <div className="w-[44px] h-[34px] border border-dashed border-white/10 rounded flex items-center justify-center text-[7.5px] text-white/20">無</div>
+            <div className="w-[38px] h-[28px] sm:w-[44px] sm:h-[34px] border border-dashed border-white/10 rounded flex items-center justify-center text-[7.5px] text-white/20">無</div>
           )}
         </div>
       </div>
@@ -377,9 +383,9 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
       {/* ========================================================================= */}
       {/* 2. CENTER BATTLE ZONE: Expansive Dual 6-Slot Arena Grid                   */}
       {/* ========================================================================= */}
-      <div className="relative flex-1 w-full max-w-5xl mx-auto flex flex-col justify-center items-center px-2 py-1 z-10 pointer-events-auto">
+      <div className="relative flex-1 w-full max-w-5xl mx-auto flex flex-col justify-center items-center px-1 sm:px-2 py-0.5 sm:py-1 z-10 pointer-events-auto min-h-0 min-w-0">
         {/* Opponent Field (6 Creature Slots) */}
-        <div className="w-full flex items-center justify-center space-x-2 sm:space-x-3 my-1">
+        <div className="w-full flex items-center justify-center space-x-1.5 sm:space-x-2.5 md:space-x-3 my-0.5 sm:my-1 min-h-0">
           {Array.from({ length: 6 }).map((_, slotIdx) => {
             const unit = opp.field[slotIdx];
             const stats = unit ? calculateUnitStats(state, 'player2', unit) : null;
@@ -388,7 +394,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
             return (
               <div
                 key={slotIdx}
-                className={`relative w-[68px] h-[92px] rounded-lg flex items-center justify-center transition-all ${
+                className={`relative w-[54px] h-[74px] sm:w-[62px] sm:h-[84px] md:w-[68px] md:h-[92px] rounded-md sm:rounded-lg flex items-center justify-center transition-all min-h-0 shrink-0 ${
                   unit
                     ? ''
                     : 'border-2 border-dashed border-white/10 bg-black/20'
@@ -410,7 +416,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
                     onInspect={() => onInspect(getCard(unit.cards[0].cardId))}
                   />
                 ) : (
-                  <span className="text-[9px] font-black text-white/15 select-none">
+                  <span className="text-[8px] sm:text-[9px] font-black text-white/15 select-none">
                     {slotIdx + 1}
                   </span>
                 )}
@@ -422,9 +428,9 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
         {/* Arena Dividing Crest Line */}
         <div className="w-full max-w-3xl flex items-center justify-center my-0.5 opacity-60">
           <div className="flex-1 h-px bg-gradient-to-r from-transparent via-amber-400/40 to-transparent" />
-          <div className="mx-3 px-2 py-0.5 rounded-full border border-amber-400/40 bg-black/60 flex items-center space-x-1 shadow">
-            <Sword size={10} className="text-amber-400" />
-            <span className="text-[8px] font-black tracking-widest text-amber-300 uppercase">
+          <div className="mx-2 sm:mx-3 px-2 py-0.5 rounded-full border border-amber-400/40 bg-black/60 flex items-center space-x-1 shadow">
+            <Sword size={9} className="text-amber-400" />
+            <span className="text-[7.5px] sm:text-[8px] font-black tracking-widest text-amber-300 uppercase">
               BATTLE ARENA
             </span>
           </div>
@@ -432,7 +438,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
         </div>
 
         {/* Player Field (6 Creature Slots) */}
-        <div className="w-full flex items-center justify-center space-x-2 sm:space-x-3 my-1">
+        <div className="w-full flex items-center justify-center space-x-1.5 sm:space-x-2.5 md:space-x-3 my-0.5 sm:my-1 min-h-0">
           {Array.from({ length: 6 }).map((_, slotIdx) => {
             const unit = me.field[slotIdx];
             const stats = unit ? calculateUnitStats(state, 'player1', unit) : null;
@@ -451,7 +457,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
                     handlePlayHandCard(selectedHandCard.instanceId);
                   }
                 }}
-                className={`relative w-[68px] h-[92px] rounded-lg flex items-center justify-center transition-all ${
+                className={`relative w-[54px] h-[74px] sm:w-[62px] sm:h-[84px] md:w-[68px] md:h-[92px] rounded-md sm:rounded-lg flex items-center justify-center transition-all min-h-0 shrink-0 ${
                   unit
                     ? ''
                     : isSelectedHandPlayable
@@ -472,7 +478,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
                     onInspect={() => onInspect(getCard(unit.cards[0].cardId))}
                   />
                 ) : (
-                  <span className={`text-[9px] font-black select-none ${
+                  <span className={`text-[8px] sm:text-[9px] font-black select-none ${
                     isSelectedHandPlayable ? 'text-emerald-300 font-bold' : 'text-white/15'
                   }`}>
                     {isSelectedHandPlayable ? '召喚' : slotIdx + 1}
@@ -487,7 +493,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
       {/* ========================================================================= */}
       {/* 3. BOTTOM TIER: Player HUD, Hand Tray, Arcana Gauge & 3D Controls         */}
       {/* ========================================================================= */}
-      <div className="relative w-full flex items-end justify-between px-3 pb-1 z-30 pointer-events-none">
+      <div className="relative w-full flex items-end justify-between z-30 pointer-events-none shrink-0 min-h-0">
         {/* Bottom-Left: Duel Masters Plays Circular Arcana Gauge */}
         <div className="pointer-events-auto pb-0.5">
           <ArcanaGauge

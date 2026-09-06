@@ -29,17 +29,7 @@ export const LandscapeContainer: React.FC<Props> = ({ children }) => {
 
   return (
     <div className="fixed inset-0 w-full h-full bg-slate-950 overflow-hidden select-none">
-      <div 
-        className="relative w-full h-full overflow-hidden flex flex-col"
-        style={{
-          paddingLeft: 'env(safe-area-inset-left, 0px)',
-          paddingRight: 'env(safe-area-inset-right, 0px)',
-          paddingTop: 'env(safe-area-inset-top, 0px)',
-          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-        }}
-      >
-        {children}
-      </div>
+      {children}
     </div>
   );
 };

@@ -70,11 +70,11 @@ export const CardView: React.FC<CardViewProps> = ({
 
   // Size dimensions map
   const sizeClasses = {
-    'opponent-hand': 'w-[42px] h-[58px] rounded-sm',
-    'field': 'w-[68px] h-[92px] rounded-lg',
-    'hand': 'w-[78px] h-[112px] rounded-xl',
-    'compact': 'w-[50px] h-[72px] rounded-sm',
-    'default': 'w-28 h-40 rounded-md',
+    'opponent-hand': 'w-[34px] h-[48px] sm:w-[42px] sm:h-[58px] rounded-sm',
+    'field': 'w-[54px] h-[74px] sm:w-[62px] sm:h-[84px] md:w-[68px] md:h-[92px] rounded-md sm:rounded-lg',
+    'hand': 'w-[64px] h-[92px] sm:w-[72px] sm:h-[104px] md:w-[78px] md:h-[112px] rounded-lg sm:rounded-xl',
+    'compact': 'w-[40px] h-[30px] sm:w-[48px] sm:h-[36px] rounded-sm',
+    'default': 'w-24 h-34 sm:w-28 sm:h-40 rounded-md',
   }[size];
 
   // Face down rendering
@@ -132,36 +132,36 @@ export const CardView: React.FC<CardViewProps> = ({
         `}
       >
         {/* Top-Left: Cost Badge */}
-        <div className={`absolute -top-1 -left-1 w-5 h-5 rounded-full flex items-center justify-center font-black text-[10px] border border-black shadow-md z-20 ${badgeColor}`}>
+        <div className={`absolute -top-1 -left-1 w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center font-black text-[8.5px] sm:text-[10px] border border-black shadow-md z-20 ${badgeColor}`}>
           {card.cost}
         </div>
 
         {/* Top-Right: Evolution Counter or Guard Sigil */}
         <div className="absolute top-0.5 right-0.5 flex items-center space-x-0.5 z-20">
           {hasGuard && (
-            <div className="w-4 h-4 rounded bg-cyan-950 border border-cyan-400 text-cyan-300 flex items-center justify-center shadow" title="ガード能力">
-              <Shield size={10} className="fill-cyan-400/40" />
+            <div className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded bg-cyan-950 border border-cyan-400 text-cyan-300 flex items-center justify-center shadow" title="ガード能力">
+              <Shield size={9} className="fill-cyan-400/40" />
             </div>
           )}
           {evoCount > 1 && (
-            <div className="bg-yellow-400 text-slate-950 text-[8px] font-black px-1 rounded-full border border-black shadow">
+            <div className="bg-yellow-400 text-slate-950 text-[7px] sm:text-[8px] font-black px-1 rounded-full border border-black shadow">
               +{evoCount - 1}
             </div>
           )}
         </div>
 
         {/* Name Bar */}
-        <div className="pt-3 px-1 pb-0.5 bg-black/75 text-center truncate whitespace-nowrap overflow-hidden text-[8.5px] leading-tight font-black tracking-tight text-white shadow-inner">
+        <div className="pt-2 sm:pt-2.5 px-0.5 sm:px-1 pb-0.5 bg-black/75 text-center truncate whitespace-nowrap overflow-hidden text-[7px] sm:text-[8.5px] leading-tight font-black tracking-tight text-white shadow-inner">
           {card.name}
         </div>
 
         {/* Center Art / Sigil Area */}
-        <div className="flex-1 flex flex-col items-center justify-center relative my-0.5 px-1">
-          <div className="w-7 h-7 rounded-full border border-white/20 bg-black/40 flex items-center justify-center shadow-inner">
-            <span className="text-[9px] font-black text-white/70">{card.system[0]}</span>
+        <div className="flex-1 flex flex-col items-center justify-center relative my-0.5 px-0.5 sm:px-1">
+          <div className="w-5 h-5 sm:w-7 sm:h-7 rounded-full border border-white/20 bg-black/40 flex items-center justify-center shadow-inner">
+            <span className="text-[7.5px] sm:text-[9px] font-black text-white/70">{card.system[0]}</span>
           </div>
           {card.lineage && (
-            <span className="text-[6.5px] font-bold text-amber-300/80 truncate max-w-full mt-0.5">
+            <span className="text-[5.5px] sm:text-[6.5px] font-bold text-amber-300/80 truncate max-w-full mt-0.5">
               {lineageMap[card.lineage] || card.lineage}
             </span>
           )}
@@ -169,9 +169,9 @@ export const CardView: React.FC<CardViewProps> = ({
           {/* Summoning Sickness (Sleep / 待機 indicator) */}
           {hasSummoningSickness && !isRested && (
             <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] flex items-center justify-center z-10">
-              <div className="bg-amber-950/90 border border-amber-400/80 px-1.5 py-0.5 rounded-full flex items-center space-x-0.5 shadow-lg animate-pulse">
-                <Moon size={9} className="text-yellow-300 fill-yellow-300" />
-                <span className="text-[7.5px] font-black text-amber-200">待機</span>
+              <div className="bg-amber-950/90 border border-amber-400/80 px-1 py-0.5 rounded-full flex items-center space-x-0.5 shadow-lg animate-pulse">
+                <Moon size={8} className="text-yellow-300 fill-yellow-300" />
+                <span className="text-[6.5px] sm:text-[7.5px] font-black text-amber-200">待機</span>
               </div>
             </div>
           )}
@@ -179,7 +179,7 @@ export const CardView: React.FC<CardViewProps> = ({
 
         {/* Bottom Combat Stats Bar (ATK / BRK / DEF) */}
         {isUnit && (
-          <div className="grid grid-cols-3 items-center py-0.5 bg-slate-950/95 border-t border-white/15 text-[8.5px] font-black leading-none text-center shadow-inner">
+          <div className="grid grid-cols-3 items-center py-0.5 bg-slate-950/95 border-t border-white/15 text-[7px] sm:text-[8.5px] font-black leading-none text-center shadow-inner">
             <div className="text-red-400 flex items-center justify-center space-x-0.5" title="ATK (攻撃力)">
               <span>{displayAtk}</span>
             </div>

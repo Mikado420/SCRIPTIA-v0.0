@@ -41,7 +41,7 @@ export const BarrierPlates: React.FC<Props> = ({
             >
               {/* Hexagonal Floating Plate */}
               <div
-                className={`w-6 h-7 sm:w-7 sm:h-8 flex items-center justify-center relative transition-all ${
+                className={`w-5 h-6 sm:w-6 sm:h-7 flex items-center justify-center relative transition-all ${
                   isActive
                     ? isOpponent
                       ? 'text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.9)]'
@@ -50,8 +50,7 @@ export const BarrierPlates: React.FC<Props> = ({
                 }`}
               >
                 <Shield
-                  size={24}
-                  className={`transition-transform ${
+                  className={`w-4 h-5 sm:w-5 sm:h-6 transition-transform ${
                     isActive
                       ? isOpponent
                         ? 'fill-yellow-400/80 stroke-yellow-200 stroke-[1.5]'

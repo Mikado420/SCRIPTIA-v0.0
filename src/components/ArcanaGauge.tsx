@@ -104,29 +104,29 @@ export const ArcanaGauge: React.FC<Props> = ({
         <div className="absolute -inset-1.5 rounded-full bg-blue-500/30 blur-md group-hover:bg-blue-400/40 transition-colors animate-pulse" />
 
         {/* Outer Circular Frame */}
-        <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-b from-slate-700 via-slate-900 to-black p-1 shadow-2xl border-2 border-amber-400/60 flex items-center justify-center">
+        <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-b from-slate-700 via-slate-900 to-black p-1 shadow-2xl border-2 border-amber-400/60 flex items-center justify-center">
           {/* Beveled Inset */}
           <div className="w-full h-full rounded-full bg-gradient-to-br from-indigo-950 via-slate-950 to-blue-950 border border-blue-400/40 flex flex-col items-center justify-center relative overflow-hidden shadow-inner">
             {/* Background Mystic Runes */}
             <div className="absolute inset-0 bg-[radial-gradient(#38bdf8_1px,transparent_1px)] [background-size:8px_8px] opacity-20" />
 
             {/* Label */}
-            <span className="text-[9px] sm:text-[10px] font-black text-cyan-300 tracking-wider drop-shadow">
+            <span className="text-[7.5px] sm:text-[9px] font-black text-cyan-300 tracking-wider drop-shadow leading-none">
               ARCANA
             </span>
 
             {/* Huge Counter */}
             <div className="flex items-baseline justify-center font-mono font-black text-white leading-none my-0.5">
-              <span className="text-2xl sm:text-3xl text-cyan-200 drop-shadow-[0_0_12px_rgba(56,189,248,0.8)]">
+              <span className="text-xl sm:text-2xl text-cyan-200 drop-shadow-[0_0_12px_rgba(56,189,248,0.8)]">
                 {current}
               </span>
-              <span className="text-sm sm:text-base text-cyan-400/70 mx-0.5">/</span>
-              <span className="text-sm sm:text-base text-slate-300">
+              <span className="text-xs sm:text-sm text-cyan-400/70 mx-0.5">/</span>
+              <span className="text-xs sm:text-sm text-slate-300">
                 {max}
               </span>
             </div>
 
-            <span className="text-[7.5px] sm:text-[8px] font-bold text-slate-400">TAP TO VIEW</span>
+            <span className="text-[6.5px] sm:text-[7.5px] font-bold text-slate-400 leading-none">TAP</span>
           </div>
 
           {/* Elemental Affinity Orbs arrayed around the rim */}
@@ -146,7 +146,7 @@ export const ArcanaGauge: React.FC<Props> = ({
                   top: `${y}%`,
                   transform: 'translate(-50%, -50%)',
                 }}
-                className={`absolute w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center border shadow-lg transition-all duration-300 ${
+                className={`absolute w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center border shadow-lg transition-all duration-300 text-[8px] sm:text-[9px] ${
                   isActive
                     ? `${sys.color} ${sys.glow} scale-110 ring-1 ring-white/80 z-20`
                     : 'bg-slate-900/90 border-slate-700 text-slate-500 opacity-40 grayscale z-10'
@@ -161,27 +161,27 @@ export const ArcanaGauge: React.FC<Props> = ({
       </button>
 
       {/* Side HUD: Deck & Archive Badges */}
-      <div className="flex flex-col space-y-1.5">
+      <div className="flex flex-col space-y-1 sm:space-y-1.5">
         {/* Deck Count */}
         <div 
-          className="flex items-center space-x-1.5 bg-slate-950/80 backdrop-blur border border-slate-700 px-2.5 py-1 rounded-lg shadow"
+          className="flex items-center space-x-1 sm:space-x-1.5 bg-slate-950/80 backdrop-blur border border-slate-700 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg shadow"
           title="自分の山札残り枚数"
         >
-          <Layers size={13} className="text-amber-400" />
-          <span className="text-[10px] font-bold text-slate-300">山札</span>
-          <span className="font-mono font-black text-xs text-white">{deckCount}</span>
+          <Layers size={11} className="text-amber-400" />
+          <span className="text-[9px] sm:text-[10px] font-bold text-slate-300">山札</span>
+          <span className="font-mono font-black text-[11px] sm:text-xs text-white">{deckCount}</span>
         </div>
 
         {/* Archive / Graveyard Count */}
         <button
           type="button"
           onClick={onOpenArchive}
-          className="flex items-center space-x-1.5 bg-slate-950/80 hover:bg-slate-900 backdrop-blur border border-purple-500/40 hover:border-purple-400 px-2.5 py-1 rounded-lg shadow transition-colors cursor-pointer text-left"
+          className="flex items-center space-x-1 sm:space-x-1.5 bg-slate-950/80 hover:bg-slate-900 backdrop-blur border border-purple-500/40 hover:border-purple-400 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg shadow transition-colors cursor-pointer text-left"
           title="自分のアーカイブ(墓地)を確認"
         >
-          <Archive size={13} className="text-purple-400" />
-          <span className="text-[10px] font-bold text-purple-300">墓地</span>
-          <span className="font-mono font-black text-xs text-white">{archiveCount}</span>
+          <Archive size={11} className="text-purple-400" />
+          <span className="text-[9px] sm:text-[10px] font-bold text-purple-300">墓地</span>
+          <span className="font-mono font-black text-[11px] sm:text-xs text-white">{archiveCount}</span>
         </button>
       </div>
     </div>

@@ -31,15 +31,15 @@ export const HandTray: React.FC<Props> = ({
 
   // Dynamic overlap based on hand card count
   const getOverlapClass = () => {
-    if (hand.length <= 3) return 'space-x-2 sm:space-x-3';
-    if (hand.length <= 5) return 'space-x-0.5 sm:space-x-1';
+    if (hand.length <= 3) return 'space-x-1.5 sm:space-x-3';
+    if (hand.length <= 5) return 'space-x-0 sm:space-x-1';
     if (hand.length <= 7) return '-space-x-3 sm:-space-x-2';
     return '-space-x-5 sm:-space-x-4';
   };
 
   return (
     <div className="relative w-full flex items-end justify-center pointer-events-auto pb-0">
-      <div className={`flex items-end justify-center ${getOverlapClass()} px-2`}>
+      <div className={`flex items-end justify-center ${getOverlapClass()} px-1 sm:px-2`}>
         {hand.map((c, i) => {
           const isSelected = selectedCard === c.instanceId;
           const cardData = getCard(c.cardId);
@@ -65,14 +65,14 @@ export const HandTray: React.FC<Props> = ({
               <div
                 className={`transition-all duration-200 ease-out origin-bottom ${
                   isSelected
-                    ? '-translate-y-10 sm:-translate-y-14 scale-110 sm:scale-125 z-50'
-                    : 'translate-y-3 sm:translate-y-4 hover:-translate-y-1 hover:scale-105'
+                    ? '-translate-y-7 sm:-translate-y-12 scale-105 sm:scale-120 z-50'
+                    : 'translate-y-2 sm:translate-y-3 hover:-translate-y-1 hover:scale-105'
                 }`}
               >
                 {/* Action Buttons Bubble above Selected Card */}
                 {isSelected && (
                   <div
-                    className="absolute -top-11 left-1/2 -translate-x-1/2 flex items-center space-x-1 bg-slate-950/95 border-2 border-yellow-400/90 rounded-full px-2 py-1 shadow-2xl z-50 whitespace-nowrap animate-in fade-in zoom-in-90 duration-150"
+                    className="absolute -top-10 sm:-top-11 left-1/2 -translate-x-1/2 flex items-center space-x-1 bg-slate-950/95 border-2 border-yellow-400/90 rounded-full px-1.5 sm:px-2 py-0.5 sm:py-1 shadow-2xl z-50 whitespace-nowrap animate-in fade-in zoom-in-90 duration-150"
                     onClick={(e) => e.stopPropagation()}
                   >
                     {/* Action 1: Summon / Play */}
