@@ -5,7 +5,7 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
-    base: '/SCRIPTIA-v0.0/',
+    base: './',
     define: {
       'process.env': {}
     },
