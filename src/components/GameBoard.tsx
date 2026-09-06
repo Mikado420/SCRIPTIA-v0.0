@@ -44,14 +44,14 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
   });
   const [showPlaymatSelector, setShowPlaymatSelector] = useState(false);
 
-  // Auto-fit scaler for iPhone 13 Landscape: 880px x 390px
+  // Auto-fit scaler for iPhone 13 Landscape: 844px x 390px
   const [scale, setScale] = useState(1);
 
   useEffect(() => {
     const updateScale = () => {
       const w = window.innerWidth;
       const h = window.innerHeight;
-      const nextScale = Math.min(w / 880, h / 390);
+      const nextScale = Math.min(w / 844, h / 390);
       setScale(nextScale);
     };
     updateScale();
@@ -376,11 +376,11 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
       className="fixed inset-0 w-screen h-screen overflow-hidden bg-slate-950 flex items-center justify-center select-none"
       onClick={handleBoardClick}
     >
-      {/* Auto-Fit Scaled Canvas: strictly 880px x 390px (iPhone 13 Landscape viewport) */}
+      {/* Auto-Fit Scaled Canvas: strictly 844px x 390px (iPhone 13 Landscape viewport) */}
       <div
         id="gameboard-canvas"
         style={{
-          width: '880px',
+          width: '844px',
           height: '390px',
           transform: `scale(${scale})`,
           transformOrigin: 'center center',
@@ -399,46 +399,102 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
         </div>
 
         {/* ========================================================================= */}
-        {/* HEADER BAR (Height ~28px): Turn info & Drawer toggles                    */}
+        {/* HEADER BAR (Height ~34px): Opponent Info, Shields & Combat Indicators      */}
         {/* ========================================================================= */}
-        <div className="h-[28px] w-full px-3 flex items-center justify-between z-30 pointer-events-auto bg-black/40 border-b border-white/10 shrink-0">
+        <div className="h-[34px] w-full px-2.5 flex items-center justify-between z-30 pointer-events-auto bg-black/60 backdrop-blur-md border-b border-white/10 shrink-0 select-none">
+          {/* Left: App Title & Turn Status */}
           <div className="flex items-center space-x-2">
             <span className="font-black text-[11px] tracking-wider text-amber-300">
               SCRIPTIA <span className="text-[9px] text-slate-400 font-normal">v0.07</span>
             </span>
             <div className="h-3 w-px bg-white/20" />
             <span className="text-[10px] font-bold text-slate-300">
-              TURN {state.turnCount} : {isMyTurn ? 'あなたのターン' : '相手のターン'}
+              TURN {state.turnCount} : {isMyTurn ? '自軍ターン' : '相手ターン'}
             </span>
-            <span className={`text-[9px] font-black px-1.5 py-0.2 rounded-full ${
-              state.phase === 'ARCANA_PLACEMENT' ? 'bg-cyan-950 text-cyan-300 border border-cyan-500/50' : 'bg-amber-950 text-amber-300 border border-amber-500/50'
-            }`}>
-              {state.phase === 'ARCANA_PLACEMENT' ? 'アルカナ配置' : 'メイン行動'}
-            </span>
-          </div>
-
-          {/* Opponent Hand Mini Preview */}
-          <div className="flex items-center -space-x-1.5">
-            {opp.hand.map(c => (
-              <div key={c.instanceId} className="w-5 h-6 rounded bg-slate-800 border border-white/20 shadow-sm" />
-            ))}
-            <span className="text-[9px] font-mono font-bold text-slate-400 ml-2">手札 {opp.hand.length}枚</span>
-          </div>
-
-          {/* Header Controls */}
-          <div className="flex items-center space-x-1.5">
-            <button
-              id="theme-toggle-btn"
-              onClick={() => setShowPlaymatSelector(true)}
-              className="p-1 rounded bg-slate-900/80 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition-all text-[10px]"
-              title="プレイマット変更"
+            <span
+              className={`text-[9px] font-black px-1.5 py-0.2 rounded-full ${
+                state.phase === 'ARCANA_PLACEMENT'
+                  ? 'bg-cyan-950 text-cyan-300 border border-cyan-500/50'
+                  : 'bg-amber-950 text-amber-300 border border-amber-500/50'
+              }`}
             >
-              <Palette size={12} />
+              {state.phase === 'ARCANA_PLACEMENT' ? 'アルカナ' : 'メイン'}
+            </span>
+          </div>
+
+          {/* Center: Opponent Profile + 5 Barrier Shields (Duel Masters style) */}
+          <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-1.5 bg-slate-900/80 px-2 py-0.5 rounded-full border border-red-500/40 shadow-sm">
+              <div className="w-5 h-5 rounded-full bg-red-800 border border-amber-300 flex items-center justify-center">
+                <User size={12} className="text-yellow-200" />
+              </div>
+              <span className="text-[9.5px] font-black text-slate-200">相手</span>
+            </div>
+
+            {/* Opponent 5 Horizontal Barrier Shields (Targetable for Direct Attack!) */}
+            <BarrierPlates
+              count={opp.barrier}
+              max={5}
+              isOpponent
+              orientation="horizontal"
+              compact
+              isTargetable={canDirectAttack}
+              onClick={handleOpponentDirectAttack}
+            />
+          </div>
+
+          {/* Right: Opponent Arcana, Opponent Hand & Combat Log */}
+          <div className="flex items-center space-x-2">
+            {/* Opponent Arcana Pill */}
+            <ArcanaGauge
+              current={opp.currentArcana}
+              max={opp.maxArcana}
+              arcanaCards={opp.arcana}
+              onOpenArcana={() =>
+                setZoneModal({
+                  isOpen: true,
+                  title: '相手のアルカナゾーン',
+                  zoneType: 'arcana',
+                  cards: opp.arcana,
+                  isOpponent: true,
+                })
+              }
+              isOpponent
+            />
+
+            {/* Opponent Hand Preview */}
+            <div className="flex items-center space-x-1 bg-black/50 px-2 py-0.5 rounded-full border border-white/10 text-[9px] font-mono text-slate-300">
+              <div className="flex -space-x-1">
+                {opp.hand.slice(0, 4).map(c => (
+                  <div key={c.instanceId} className="w-3 h-4 rounded bg-slate-700 border border-white/20" />
+                ))}
+              </div>
+              <span>{opp.hand.length}枚</span>
+            </div>
+
+            {/* Opponent Archive Button */}
+            <button
+              id="opp-archive-btn"
+              onClick={() =>
+                setZoneModal({
+                  isOpen: true,
+                  title: '相手のアーカイブ(墓地)',
+                  zoneType: 'archive',
+                  cards: opp.archive,
+                  isOpponent: true,
+                })
+              }
+              className="px-1.5 py-0.5 rounded bg-slate-900/80 hover:bg-slate-800 border border-purple-500/40 text-[9px] font-bold text-purple-300 hover:text-purple-200 shadow-sm transition-colors cursor-pointer"
+              title="相手のアーカイブ(墓地)を確認"
+            >
+              敵墓地({opp.archive.length})
             </button>
+
+            {/* Combat Log Toggle */}
             <button
               id="log-toggle-btn"
               onClick={() => setShowLog(!showLog)}
-              className="flex items-center space-x-1 px-1.5 py-0.5 rounded bg-slate-900/80 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white text-[10px] font-bold transition-all"
+              className="flex items-center space-x-1 px-2 py-0.5 rounded bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white text-[9.5px] font-bold transition-all shadow-sm active:scale-95 cursor-pointer"
               title="戦闘ログを表示"
             >
               <History size={11} className="text-amber-400" />
@@ -453,62 +509,74 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
         <div className="flex-1 w-full px-2 flex items-center justify-between z-10 pointer-events-auto relative">
           
           {/* ----------------------------------------------------------------------- */}
-          {/* PARTITION 1 (LEFT): Player Side (Vertical Barrier, Domain, 2 Runes)     */}
+          {/* LEFT SIDEBAR: Domain (1 slot) & Runes (2 sockets)                       */}
           {/* ----------------------------------------------------------------------- */}
           <div
-            id="left-player-side"
-            className="w-[84px] h-[240px] flex flex-col items-center justify-between p-1 bg-black/40 backdrop-blur-sm rounded-xl border border-cyan-500/30 shrink-0 shadow-lg"
+            id="left-extra-zone"
+            className="w-[50px] h-[240px] flex flex-col justify-between items-center py-1.5 px-0.5 bg-black/50 backdrop-blur-sm rounded-xl border border-white/10 shrink-0 shadow-lg select-none"
           >
-            {/* Player Label */}
-            <div className="flex items-center space-x-1">
-              <div className="w-4 h-4 rounded-full bg-cyan-700 border border-cyan-300 flex items-center justify-center">
-                <span className="text-[7.5px] font-black text-cyan-100">YOU</span>
-              </div>
-              <span className="text-[8.5px] font-black text-cyan-300">結界</span>
-            </div>
-
-            {/* Vertical Barrier Plates (Player 1) */}
-            <BarrierPlates
-              count={me.barrier}
-              max={5}
-              orientation="vertical"
-              isOpponent={false}
-            />
-
-            {/* Socket Divider */}
-            <div className="w-full h-px bg-cyan-500/20 my-0.5" />
-
-            {/* Player Domain (1 Slot) */}
-            <div className="flex flex-col items-center">
-              <span className="text-[6.5px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">DOMAIN</span>
-              {me.domain ? (
-                <div className="w-[36px] h-[26px]">
-                  <CardView instance={me.domain} size="compact" onInspect={() => onInspect(getCard(me.domain!.cardId))} />
+            {/* Opponent Domain & Runes (Top of strip) */}
+            <div className="flex flex-col items-center space-y-1">
+              <span className="text-[6.5px] font-black text-yellow-400/80 uppercase tracking-tighter">OPP DOMAIN</span>
+              {opp.domain ? (
+                <div className="w-[42px] h-[30px]">
+                  <CardView instance={opp.domain} size="compact" onInspect={() => onInspect(getCard(opp.domain!.cardId))} />
                 </div>
               ) : (
-                <div className="w-[36px] h-[26px] border border-dashed border-cyan-500/30 rounded flex items-center justify-center text-[7px] text-cyan-300/40">空</div>
+                <div className="w-[42px] h-[30px] border border-dashed border-yellow-500/30 rounded flex items-center justify-center text-[7px] text-yellow-300/40">空</div>
               )}
+
+              {/* Opponent Runes (2 Sockets) */}
+              <div className="flex space-x-0.5">
+                {opp.runes[0] ? (
+                  <div className="w-[20px] h-[22px]">
+                    <CardView isFaceDown size="compact" onClick={(e) => handleCardClick(opp.runes[0].instanceId, e)} />
+                  </div>
+                ) : (
+                  <div className="w-[20px] h-[22px] border border-dashed border-white/20 rounded flex items-center justify-center text-[6px] text-white/30">1</div>
+                )}
+                {opp.runes[1] ? (
+                  <div className="w-[20px] h-[22px]">
+                    <CardView isFaceDown size="compact" onClick={(e) => handleCardClick(opp.runes[1].instanceId, e)} />
+                  </div>
+                ) : (
+                  <div className="w-[20px] h-[22px] border border-dashed border-white/20 rounded flex items-center justify-center text-[6px] text-white/30">2</div>
+                )}
+              </div>
             </div>
 
-            {/* Player Runes (2 Sockets) */}
+            {/* Subtle Divider */}
+            <div className="w-full h-px bg-white/10" />
+
+            {/* Player Domain & Runes (Bottom of strip) */}
             <div className="flex flex-col items-center space-y-1">
-              <span className="text-[6.5px] font-black text-slate-400 uppercase tracking-tighter">RUNES</span>
-              <div className="flex space-x-1">
+              {/* Player Runes (2 Sockets) */}
+              <div className="flex space-x-0.5">
                 {me.runes[0] ? (
-                  <div className="w-[32px] h-[24px]">
+                  <div className="w-[20px] h-[22px]">
                     <CardView isFaceDown size="compact" onClick={(e) => handleCardClick(me.runes[0].instanceId, e)} />
                   </div>
                 ) : (
-                  <div className="w-[32px] h-[24px] border border-dashed border-white/20 rounded flex items-center justify-center text-[6.5px] text-white/30">1</div>
+                  <div className="w-[20px] h-[22px] border border-dashed border-white/20 rounded flex items-center justify-center text-[6px] text-white/30">1</div>
                 )}
                 {me.runes[1] ? (
-                  <div className="w-[32px] h-[24px]">
+                  <div className="w-[20px] h-[22px]">
                     <CardView isFaceDown size="compact" onClick={(e) => handleCardClick(me.runes[1].instanceId, e)} />
                   </div>
                 ) : (
-                  <div className="w-[32px] h-[24px] border border-dashed border-white/20 rounded flex items-center justify-center text-[6.5px] text-white/30">2</div>
+                  <div className="w-[20px] h-[22px] border border-dashed border-white/20 rounded flex items-center justify-center text-[6px] text-white/30">2</div>
                 )}
               </div>
+
+              {/* Player Domain */}
+              <span className="text-[6.5px] font-black text-cyan-400 uppercase tracking-tighter">YOU DOMAIN</span>
+              {me.domain ? (
+                <div className="w-[42px] h-[30px]">
+                  <CardView instance={me.domain} size="compact" onInspect={() => onInspect(getCard(me.domain!.cardId))} />
+                </div>
+              ) : (
+                <div className="w-[42px] h-[30px] border border-dashed border-cyan-500/30 rounded flex items-center justify-center text-[7px] text-cyan-300/40">空</div>
+              )}
             </div>
           </div>
 
@@ -527,9 +595,9 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
               </div>
             )}
             {selectedCardId && me.field.some(u => u.instanceId === selectedCardId) && (
-              <div className="absolute top-0.5 z-40 bg-red-950/95 border border-red-400 px-3 py-0.5 rounded-full shadow-xl text-[9.5px] font-bold text-red-200 flex items-center space-x-1 animate-pulse">
+              <div className="absolute top-0.5 z-40 bg-red-950/95 border border-yellow-400 px-3 py-0.5 rounded-full shadow-xl text-[9.5px] font-bold text-yellow-200 flex items-center space-x-1 animate-pulse">
                 <Sword size={10} className="text-yellow-300" />
-                <span>攻撃対象（相手のレストユニット または 右側結界ゲージ）を選択</span>
+                <span>攻撃対象（相手のレストユニット または 上部結界シールド）を選択</span>
               </div>
             )}
 
@@ -649,92 +717,22 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
             </div>
           </div>
 
-          {/* ----------------------------------------------------------------------- */}
-          {/* PARTITION 3 (RIGHT): Opponent Side (Vertical Barrier, Domain, 2 Runes)  */}
-          {/* ----------------------------------------------------------------------- */}
-          <div
-            id="right-opponent-side"
-            className={`w-[84px] h-[240px] flex flex-col items-center justify-between p-1 bg-black/40 backdrop-blur-sm rounded-xl border transition-all shrink-0 shadow-lg ${
-              canDirectAttack
-                ? 'border-yellow-400 ring-2 ring-yellow-400 animate-pulse cursor-pointer shadow-yellow-400/50'
-                : 'border-yellow-500/30'
-            }`}
-            onClick={handleOpponentDirectAttack}
-            title={canDirectAttack ? '相手の結界を直接攻撃！' : '相手結界エリア'}
-          >
-            {/* Opponent Label / Direct Attack Trigger */}
-            <div className="flex items-center space-x-1 cursor-pointer">
-              <div className="w-4 h-4 rounded-full bg-red-700 border border-yellow-300 flex items-center justify-center">
-                <span className="text-[7.5px] font-black text-yellow-100">OPP</span>
-              </div>
-              <span className={`text-[8.5px] font-black ${canDirectAttack ? 'text-yellow-300 font-black animate-pulse' : 'text-yellow-400/80'}`}>
-                {canDirectAttack ? '直接攻撃' : '結界'}
-              </span>
-            </div>
 
-            {/* Vertical Barrier Plates (Opponent) */}
-            <BarrierPlates
-              count={opp.barrier}
-              max={5}
-              orientation="vertical"
-              isOpponent
-              isTargetable={canDirectAttack}
-              onClick={handleOpponentDirectAttack}
-            />
-
-            {/* Socket Divider */}
-            <div className="w-full h-px bg-yellow-500/20 my-0.5" />
-
-            {/* Opponent Domain (1 Slot) */}
-            <div className="flex flex-col items-center">
-              <span className="text-[6.5px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">DOMAIN</span>
-              {opp.domain ? (
-                <div className="w-[36px] h-[26px]">
-                  <CardView instance={opp.domain} size="compact" onInspect={() => onInspect(getCard(opp.domain!.cardId))} />
-                </div>
-              ) : (
-                <div className="w-[36px] h-[26px] border border-dashed border-yellow-500/30 rounded flex items-center justify-center text-[7px] text-yellow-300/40">無</div>
-              )}
-            </div>
-
-            {/* Opponent Runes (2 Sockets) */}
-            <div className="flex flex-col items-center space-y-1">
-              <span className="text-[6.5px] font-black text-slate-400 uppercase tracking-tighter">RUNES</span>
-              <div className="flex space-x-1">
-                {opp.runes[0] ? (
-                  <div className="w-[32px] h-[24px]">
-                    <CardView isFaceDown size="compact" onClick={(e) => handleCardClick(opp.runes[0].instanceId, e)} />
-                  </div>
-                ) : (
-                  <div className="w-[32px] h-[24px] border border-dashed border-white/20 rounded flex items-center justify-center text-[6.5px] text-white/30">1</div>
-                )}
-                {opp.runes[1] ? (
-                  <div className="w-[32px] h-[24px]">
-                    <CardView isFaceDown size="compact" onClick={(e) => handleCardClick(opp.runes[1].instanceId, e)} />
-                  </div>
-                ) : (
-                  <div className="w-[32px] h-[24px] border border-dashed border-white/20 rounded flex items-center justify-center text-[6.5px] text-white/30">2</div>
-                )}
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* ========================================================================= */}
-        {/* BOTTOM DOCK (Height ~106px): Arcana Gauge, Hand Tray, Turn Controls       */}
+        {/* BOTTOM DOCK (Height ~106px): Arcana Orb, Hand Tray & Action Controls       */}
         {/* ========================================================================= */}
         <div
           id="bottom-dock"
-          className="h-[106px] w-full px-2 flex items-center justify-between z-30 pointer-events-none shrink-0 relative bg-black/40 border-t border-white/10"
+          className="h-[106px] w-full px-2 flex items-center justify-between z-30 pointer-events-none shrink-0 relative bg-black/60 backdrop-blur-md border-t border-white/10"
         >
-          {/* Bottom-Left: Arcana Gauge & Deck/Archive Buttons */}
-          <div className="pointer-events-auto shrink-0 flex items-center space-x-2">
+          {/* Bottom-Left: Circular Arcana Orb (Duel Masters style) */}
+          <div className="pointer-events-auto shrink-0 flex items-center">
             <ArcanaGauge
               current={me.currentArcana}
               max={me.maxArcana}
               arcanaCards={me.arcana}
-              deckCount={me.deck.length}
-              archiveCount={me.archive.length}
               onOpenArcana={() =>
                 setZoneModal({
                   isOpen: true,
@@ -744,54 +742,24 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
                   isOpponent: false,
                 })
               }
-              onOpenArchive={() =>
-                setZoneModal({
-                  isOpen: true,
-                  title: '自分のアーカイブ(墓地)',
-                  zoneType: 'archive',
-                  cards: me.archive,
-                  isOpponent: false,
-                })
-              }
             />
-
-            {/* Quick Opponent Zone Checker */}
-            <div className="flex flex-col space-y-1">
-              <button
-                id="opp-arcana-btn"
-                onClick={() =>
-                  setZoneModal({
-                    isOpen: true,
-                    title: '相手のアルカナゾーン',
-                    zoneType: 'arcana',
-                    cards: opp.arcana,
-                    isOpponent: true,
-                  })
-                }
-                className="px-1.5 py-0.5 rounded bg-slate-900/80 hover:bg-slate-800 border border-slate-700 text-[8.5px] font-bold text-slate-300"
-              >
-                敵アルカナ({opp.arcana.length})
-              </button>
-              <button
-                id="opp-archive-btn"
-                onClick={() =>
-                  setZoneModal({
-                    isOpen: true,
-                    title: '相手のアーカイブ(墓地)',
-                    zoneType: 'archive',
-                    cards: opp.archive,
-                    isOpponent: true,
-                  })
-                }
-                className="px-1.5 py-0.5 rounded bg-slate-900/80 hover:bg-slate-800 border border-slate-700 text-[8.5px] font-bold text-slate-300"
-              >
-                敵アーカイブ({opp.archive.length})
-              </button>
-            </div>
           </div>
 
-          {/* Bottom-Center: Hand Tray */}
-          <div className="flex-1 max-w-xl mx-2 flex justify-center items-end h-full pointer-events-auto">
+          {/* Bottom-Center: Player 5 Barrier Shields + Hand Tray */}
+          <div className="flex-1 flex flex-col items-center justify-end h-full px-1 pointer-events-auto">
+            {/* Player 5 Barrier Shields (Duel Masters style: horizontal plates right above hand) */}
+            <div className="mb-0.5 flex items-center space-x-1.5 bg-black/40 px-2 py-0.5 rounded-full border border-cyan-500/20 shadow-sm">
+              <span className="text-[7.5px] font-black text-cyan-300 uppercase tracking-tight">YOU 結界</span>
+              <BarrierPlates
+                count={me.barrier}
+                max={5}
+                orientation="horizontal"
+                compact
+                isOpponent={false}
+              />
+            </div>
+
+            {/* Hand Tray */}
             <HandTray
               hand={me.hand}
               state={state}
@@ -814,14 +782,23 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
               hasPrompt={!!state.prompt}
               selectedCardId={selectedCardId}
               isHandSelected={!!selectedCardId && me.hand.some(c => c.instanceId === selectedCardId)}
+              deckCount={me.deck.length}
+              archiveCount={me.archive.length}
               onNextPhase={() => {
                 dispatch({ type: 'NEXT_PHASE' });
                 setArcanaMode(false);
                 setSelectedCardId(null);
               }}
               onArcanaCharge={handleArcanaChargeBtn}
-              onToggleLog={() => setShowLog(!showLog)}
-              onOpenPlaymat={() => setShowPlaymatSelector(true)}
+              onOpenArchive={() =>
+                setZoneModal({
+                  isOpen: true,
+                  title: '自分のアーカイブ(墓地)',
+                  zoneType: 'archive',
+                  cards: me.archive,
+                  isOpponent: false,
+                })
+              }
             />
           </div>
         </div>

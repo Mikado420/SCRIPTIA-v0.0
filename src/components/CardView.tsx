@@ -70,10 +70,10 @@ export const CardView: React.FC<CardViewProps> = ({
 
   // Size dimensions map
   const sizeClasses = {
-    'opponent-hand': 'w-[34px] h-[46px] rounded-sm',
-    'field': 'w-[72px] h-[96px] rounded-lg',
-    'hand': 'w-[68px] h-[96px] rounded-lg',
-    'compact': 'w-[36px] h-[28px] rounded-sm',
+    'opponent-hand': 'w-[30px] h-[40px] rounded-sm',
+    'field': 'w-[68px] h-[90px] rounded-lg',
+    'hand': 'w-[60px] h-[84px] rounded-lg',
+    'compact': 'w-[42px] h-[32px] rounded-md',
     'default': 'w-24 h-34 sm:w-28 sm:h-40 rounded-md',
   }[size];
 

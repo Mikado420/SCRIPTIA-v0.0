@@ -7,6 +7,7 @@ interface Props {
   isOpponent?: boolean;
   isTargetable?: boolean;
   orientation?: 'horizontal' | 'vertical';
+  compact?: boolean;
   onClick?: () => void;
 }
 
@@ -16,6 +17,7 @@ export const BarrierPlates: React.FC<Props> = ({
   isOpponent = false,
   isTargetable = false,
   orientation = 'horizontal',
+  compact = false,
   onClick,
 }) => {
   const prevCount = useRef(count);
@@ -39,15 +41,17 @@ export const BarrierPlates: React.FC<Props> = ({
     <div
       onClick={onClick}
       className={`flex ${
-        isVertical ? 'flex-col items-center space-y-1.5 py-1.5 px-1.5' : 'flex-row items-center space-x-1 sm:space-x-1.5 px-2 py-0.5 sm:py-1'
+        isVertical
+          ? 'flex-col items-center space-y-1 py-1 px-1'
+          : 'flex-row items-center space-x-1 px-2 py-0.5'
       } rounded-xl transition-all select-none ${
         isTargetable
-          ? 'cursor-pointer ring-2 ring-red-500 bg-red-950/80 shadow-lg shadow-red-500/50 animate-pulse'
-          : 'bg-black/50 backdrop-blur-sm border border-white/10 shadow-md'
+          ? 'cursor-pointer ring-2 ring-yellow-400 bg-red-950/90 shadow-[0_0_14px_rgba(250,204,21,0.9)] animate-pulse z-40'
+          : 'bg-black/60 backdrop-blur-sm border border-white/10 shadow-sm'
       }`}
       title={isTargetable ? '相手の結界を直接攻撃！' : `結界: ${count}/${max}`}
     >
-      <div className={`flex ${isVertical ? 'flex-col space-y-1' : 'flex-row items-center space-x-1'}`}>
+      <div className={`flex ${isVertical ? 'flex-col space-y-0.5' : 'flex-row items-center space-x-0.5'}`}>
         {Array.from({ length: max }).map((_, idx) => {
           const isActive = idx < count;
           const isJustShattered = shatteringIndex === idx;
@@ -61,18 +65,18 @@ export const BarrierPlates: React.FC<Props> = ({
                   : 'scale-90 opacity-30 grayscale'
               }`}
             >
-              {/* Hexagonal Floating Plate */}
+              {/* Floating Shield Plate */}
               <div
-                className={`w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center relative transition-all ${
+                className={`${compact ? 'w-4 h-4' : 'w-5 h-5'} flex items-center justify-center relative transition-all ${
                   isActive
                     ? isOpponent
-                      ? 'text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.9)]'
-                      : 'text-cyan-400 drop-shadow-[0_0_8px_rgba(56,189,248,0.9)]'
+                      ? 'text-yellow-400 drop-shadow-[0_0_6px_rgba(250,204,21,0.9)]'
+                      : 'text-cyan-400 drop-shadow-[0_0_6px_rgba(56,189,248,0.9)]'
                     : 'text-slate-700'
                 }`}
               >
                 <Shield
-                  className={`w-4 h-4 sm:w-5 sm:h-5 transition-transform ${
+                  className={`${compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} transition-transform ${
                     isActive
                       ? isOpponent
                         ? 'fill-yellow-400/80 stroke-yellow-200 stroke-[1.5]'
@@ -84,7 +88,7 @@ export const BarrierPlates: React.FC<Props> = ({
                 {/* Crystal core glint */}
                 {isActive && (
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_6px_#fff]" />
+                    <div className="w-1 h-1 rounded-full bg-white shadow-[0_0_4px_#fff]" />
                   </div>
                 )}
               </div>
