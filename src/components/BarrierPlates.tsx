@@ -1,5 +1,5 @@
-import React from 'react';
-import { Shield, Zap, Sparkles } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Shield, Sparkles } from 'lucide-react';
 
 interface Props {
   count: number;
@@ -16,19 +16,35 @@ export const BarrierPlates: React.FC<Props> = ({
   isTargetable = false,
   onClick,
 }) => {
+  const prevCount = useRef(count);
+  const [shatteringIndex, setShatteringIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (count < prevCount.current) {
+      // One or more barriers broke! Animate the last broken index
+      setShatteringIndex(count);
+      const timer = setTimeout(() => {
+        setShatteringIndex(null);
+      }, 900);
+      return () => clearTimeout(timer);
+    }
+    prevCount.current = count;
+  }, [count]);
+
   return (
     <div
       onClick={onClick}
-      className={`flex items-center space-x-1 sm:space-x-1.5 px-2 py-1 rounded-xl transition-all select-none ${
+      className={`flex items-center space-x-1 sm:space-x-1.5 px-2 py-0.5 sm:py-1 rounded-xl transition-all select-none ${
         isTargetable
-          ? 'cursor-pointer ring-2 ring-red-500 bg-red-950/60 shadow-lg shadow-red-500/40 animate-pulse'
-          : 'bg-black/40 backdrop-blur-sm border border-white/10'
+          ? 'cursor-pointer ring-2 ring-red-500 bg-red-950/80 shadow-lg shadow-red-500/50 animate-pulse'
+          : 'bg-black/50 backdrop-blur-sm border border-white/10 shadow-md'
       }`}
       title={isTargetable ? '相手の結界を直接攻撃！' : `結界: ${count}/${max}`}
     >
       <div className="flex items-center space-x-1">
         {Array.from({ length: max }).map((_, idx) => {
           const isActive = idx < count;
+          const isJustShattered = shatteringIndex === idx;
 
           return (
             <div
@@ -41,7 +57,7 @@ export const BarrierPlates: React.FC<Props> = ({
             >
               {/* Hexagonal Floating Plate */}
               <div
-                className={`w-5 h-6 sm:w-6 sm:h-7 flex items-center justify-center relative transition-all ${
+                className={`w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center relative transition-all ${
                   isActive
                     ? isOpponent
                       ? 'text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.9)]'
@@ -50,7 +66,7 @@ export const BarrierPlates: React.FC<Props> = ({
                 }`}
               >
                 <Shield
-                  className={`w-4 h-5 sm:w-5 sm:h-6 transition-transform ${
+                  className={`w-4 h-4 sm:w-5 sm:h-5 transition-transform ${
                     isActive
                       ? isOpponent
                         ? 'fill-yellow-400/80 stroke-yellow-200 stroke-[1.5]'
@@ -67,9 +83,30 @@ export const BarrierPlates: React.FC<Props> = ({
                 )}
               </div>
 
-              {/* Shatter indicator when broken */}
-              {!isActive && (
-                <div className="absolute inset-0 flex items-center justify-center text-[9px] font-black text-slate-500">
+              {/* Shatter Glass Animation effect when broken */}
+              {isJustShattered && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-50">
+                  {/* Glowing shockwave */}
+                  <div className="absolute w-8 h-8 rounded-full border-2 border-yellow-300 animate-summon-ripple" />
+                  {/* Flying glass shards */}
+                  {[-30, 30, -20, 20, 0].map((deg, sIdx) => (
+                    <div
+                      key={sIdx}
+                      style={{
+                        '--tw-shatter-x': `${(sIdx - 2) * 18}px`,
+                        '--tw-shatter-y': `${sIdx % 2 === 0 ? -24 : 24}px`,
+                        '--tw-shatter-r': `${deg * 2}deg`,
+                      } as React.CSSProperties}
+                      className="absolute w-2 h-2 bg-yellow-200 border border-white rotate-45 shadow-[0_0_8px_#fef08a] animate-shatter-shard"
+                    />
+                  ))}
+                  <Sparkles size={14} className="text-yellow-300 animate-ping absolute" />
+                </div>
+              )}
+
+              {/* Broken X mark */}
+              {!isActive && !isJustShattered && (
+                <div className="absolute inset-0 flex items-center justify-center text-[8px] font-black text-slate-500">
                   ✕
                 </div>
               )}
@@ -80,7 +117,7 @@ export const BarrierPlates: React.FC<Props> = ({
 
       {/* Numerical Badge */}
       <span
-        className={`font-mono font-black text-xs ml-1 ${
+        className={`font-mono font-black text-[11px] sm:text-xs ml-1 ${
           count > 0
             ? isOpponent
               ? 'text-yellow-300'

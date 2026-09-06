@@ -14,3 +14,59 @@ html, body, #root {
   -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
 }
+
+@keyframes screenShake {
+  0% { transform: translate(0, 0); }
+  20% { transform: translate(-6px, 4px) rotate(-0.5deg); }
+  40% { transform: translate(6px, -4px) rotate(0.5deg); }
+  60% { transform: translate(-4px, -3px); }
+  80% { transform: translate(4px, 3px); }
+  100% { transform: translate(0, 0); }
+}
+
+.animate-screen-shake {
+  animation: screenShake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+@keyframes summonPulseRipple {
+  0% { transform: scale(0.6); opacity: 0.9; box-shadow: 0 0 10px #38bdf8; }
+  50% { opacity: 0.7; box-shadow: 0 0 35px #38bdf8, 0 0 60px #f59e0b; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+
+.animate-summon-ripple {
+  animation: summonPulseRipple 0.75s ease-out forwards;
+}
+
+@keyframes shatterShard {
+  0% { transform: scale(1) translate(0, 0); opacity: 1; }
+  50% { opacity: 0.8; }
+  100% { transform: scale(0.2) translate(var(--tw-shatter-x, 30px), var(--tw-shatter-y, 30px)) rotate(var(--tw-shatter-r, 45deg)); opacity: 0; }
+}
+
+.animate-shatter-shard {
+  animation: shatterShard 0.7s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+@keyframes cutinPop {
+  0% { transform: scale(0.65) translateY(30px); opacity: 0; }
+  18% { transform: scale(1.06) translateY(-4px); opacity: 1; }
+  75% { transform: scale(1) translateY(0); opacity: 1; }
+  100% { transform: scale(0.9) translateY(-25px); opacity: 0; }
+}
+
+.animate-cutin-pop {
+  animation: cutinPop 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes attackDash {
+  0% { transform: translateY(0) scale(1); }
+  35% { transform: translateY(-30px) scale(1.1); z-index: 50; }
+  65% { transform: translateY(-45px) scale(1.15); z-index: 50; }
+  100% { transform: translateY(0) scale(1); }
+}
+
+.animate-attack-dash {
+  animation: attackDash 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+

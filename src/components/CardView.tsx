@@ -127,7 +127,7 @@ export const CardView: React.FC<CardViewProps> = ({
         className={`relative ${sizeClasses} bg-gradient-to-b ${sysColor} border-2 flex flex-col justify-between select-none overflow-hidden shrink-0 transition-all duration-200 shadow-lg
           ${selected ? 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-black scale-105 z-30 shadow-yellow-500/50' : ''}
           ${playable ? 'cursor-pointer hover:border-yellow-300' : ''}
-          ${isRested ? 'rotate-90 origin-center opacity-85 shadow-md' : ''}
+          ${isRested ? 'rotate-90 scale-[0.84] origin-center opacity-85 shadow-md' : ''}
           ${className}
         `}
       >
@@ -202,8 +202,12 @@ export const CardView: React.FC<CardViewProps> = ({
         onClick={onClick}
         onContextMenu={onContextMenu}
         className={`relative ${sizeClasses} bg-gradient-to-b ${sysColor} border-2 flex flex-col justify-between select-none overflow-hidden shrink-0 transition-all shadow-lg
-          ${selected ? 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-black -translate-y-3 scale-105 z-30 shadow-yellow-500/30' : 'hover:-translate-y-2 hover:scale-105'}
-          ${playable ? 'cursor-pointer hover:border-yellow-300' : ''}
+          ${selected ? 'ring-3 ring-yellow-400 ring-offset-2 ring-offset-black -translate-y-3 scale-105 z-30 shadow-yellow-500/50' : 'hover:-translate-y-2 hover:scale-105'}
+          ${
+            playable
+              ? 'border-emerald-400 ring-2 ring-emerald-400/90 shadow-[0_0_18px_rgba(52,211,153,0.85)] animate-pulse cursor-pointer hover:border-emerald-300 hover:shadow-[0_0_24px_rgba(52,211,153,1)]'
+              : 'opacity-50 grayscale-[40%] brightness-75 border-slate-700/60'
+          }
           ${className}
         `}
       >
@@ -227,11 +231,11 @@ export const CardView: React.FC<CardViewProps> = ({
         )}
 
         {/* Name and Type */}
-        <div className="pt-3 px-1 pb-0.5 bg-black/50 text-center">
-          <div className="truncate whitespace-nowrap overflow-hidden text-[10px] leading-tight font-bold tracking-tight text-white">
+        <div className="pt-3 px-1 pb-0.5 bg-black/60 text-center">
+          <div className="truncate whitespace-nowrap overflow-hidden text-[11px] leading-tight font-black tracking-tight text-white">
             {card.name}
           </div>
-          <div className="text-[6.5px] text-amber-300/80 font-bold uppercase tracking-tight truncate">
+          <div className="text-[6.5px] text-amber-300/90 font-bold uppercase tracking-tight truncate">
             {typeMap[card.type] || card.type} {card.lineage ? `• ${lineageMap[card.lineage] || card.lineage}` : ''}
           </div>
         </div>
