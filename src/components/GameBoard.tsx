@@ -7,6 +7,7 @@ import { BarrierPlates } from './BarrierPlates';
 import { ActionControls } from './ActionControls';
 import { PlaymatSelector, PlaymatThemeId, PLAYMAT_THEMES } from './PlaymatSelector';
 import { ZoneViewerModal, ZoneSelectionConfig } from './ZoneViewerModal';
+import { QuickInspectPanel } from './QuickInspectPanel';
 import { getCard } from '../data/cards';
 import { calculateUnitStats, canPlayCard } from '../engine/engineUtils';
 import { canUnitGuard, isValidAttackTarget } from '../engine/combatEngine';
@@ -170,6 +171,25 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
     isMyTurn &&
     state.phase === 'ACTION' &&
     canPlayCard(getCard(selectedHandCard.cardId), me.currentArcana, me.arcana, me.field.length);
+
+  // Derive inspected card data for Duel Masters top-left popup window (IMG_9589)
+  const inspectedCardData = selectedCardId
+    ? (me.hand.find(c => c.instanceId === selectedCardId)
+      ? getCard(me.hand.find(c => c.instanceId === selectedCardId)!.cardId)
+      : (me.field.find(u => u.instanceId === selectedCardId)
+        ? getCard(me.field.find(u => u.instanceId === selectedCardId)!.cards[0].cardId)
+        : (opp.field.find(u => u.instanceId === selectedCardId)
+          ? getCard(opp.field.find(u => u.instanceId === selectedCardId)!.cards[0].cardId)
+          : null)))
+    : null;
+
+  const inspectedUnitStats = selectedCardId
+    ? (me.field.find(u => u.instanceId === selectedCardId)
+      ? calculateUnitStats(state, 'player1', me.field.find(u => u.instanceId === selectedCardId)!)
+      : (opp.field.find(u => u.instanceId === selectedCardId)
+        ? calculateUnitStats(state, 'player2', opp.field.find(u => u.instanceId === selectedCardId)!)
+        : undefined))
+    : undefined;
 
   // Attack animation execution
   const performAttackAnimation = (attackerId: string, targetId?: string) => {
@@ -613,8 +633,37 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
             </div>
           )}
 
+          {/* OPPONENT FLOOR SHIELDS: 5 Horizontal Cyan Shield Cards (Duel Masters style: IMG_9585) */}
+          <div className="w-full flex items-center justify-center space-x-2 py-0.5 pointer-events-auto">
+            {Array.from({ length: 5 }).map((_, idx) => {
+              const active = idx < opp.barrier;
+              return (
+                <button
+                  type="button"
+                  key={`opp-floor-shield-${idx}`}
+                  disabled={!canDirectAttack}
+                  onClick={handleOpponentDirectAttack}
+                  className={`w-6 h-8 rounded-sm border transition-all duration-300 flex items-center justify-center select-none ${
+                    active
+                      ? canDirectAttack
+                        ? 'bg-gradient-to-b from-amber-400 via-yellow-400 to-amber-600 border-yellow-200 shadow-[0_0_12px_rgba(250,204,21,1)] cursor-pointer animate-pulse scale-105'
+                        : 'bg-gradient-to-b from-cyan-400 via-sky-500 to-blue-700 border-cyan-200 shadow-[0_0_8px_rgba(34,211,238,0.7)]'
+                      : 'bg-slate-900/40 border-slate-700/20 opacity-20'
+                  }`}
+                  title={canDirectAttack ? '相手シールドへ直接攻撃！' : `相手シールド ${idx + 1}/5`}
+                >
+                  {active && (
+                    <div className="w-3.5 h-5 rounded-xs border border-white/40 bg-white/20 shadow-inner flex items-center justify-center">
+                      <Shield size={8} className={canDirectAttack ? 'text-slate-950 fill-current' : 'text-cyan-100 fill-cyan-100'} />
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
           {/* UPPER ROW: Opponent Field (6 Slots: w-[68px] h-[90px]) */}
-          <div id="opponent-field-row" className="w-full flex items-center justify-center space-x-2 pt-1">
+          <div id="opponent-field-row" className="w-full flex items-center justify-center space-x-2">
             {Array.from({ length: 6 }).map((_, slotIdx) => {
               const unit = opp.field[slotIdx];
               const stats = unit ? calculateUnitStats(state, 'player2', unit) : null;
@@ -629,7 +678,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
                   className={`relative w-[68px] h-[90px] rounded-lg flex items-center justify-center shrink-0 transition-all ${
                     unit
                       ? 'overflow-visible'
-                      : 'border border-cyan-500/20 bg-cyan-950/20 shadow-inner'
+                      : 'border border-cyan-500/15 bg-cyan-950/10 shadow-inner'
                   } ${
                     isTarget
                       ? 'ring-2 ring-yellow-400 shadow-lg shadow-yellow-400/60 cursor-pointer animate-pulse z-30'
@@ -660,7 +709,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
           </div>
 
           {/* Center Arena Battle Divider Line (Glowing Cyber Line) */}
-          <div className="w-full max-w-md flex items-center justify-center h-[12px] opacity-80 my-0.5">
+          <div className="w-full max-w-md flex items-center justify-center h-[10px] opacity-80 my-0.5">
             <div className="flex-1 h-px bg-gradient-to-r from-transparent via-amber-400/60 to-transparent" />
             <div className="mx-2 px-2 py-0.2 rounded-full border border-amber-400/40 bg-black/80 flex items-center space-x-1 shadow">
               <Sword size={8} className="text-amber-400" />
@@ -697,7 +746,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
                       ? 'overflow-visible'
                       : isSelectedHandPlayable
                         ? 'border-2 border-emerald-400 bg-emerald-950/40 cursor-pointer shadow-lg shadow-emerald-500/40 animate-pulse'
-                        : 'border border-cyan-500/20 bg-cyan-950/20 shadow-inner'
+                        : 'border border-cyan-500/15 bg-cyan-950/10 shadow-inner'
                   } ${isAttacking ? 'animate-attack-dash z-40' : ''}`}
                 >
                   {hasRipple && (
@@ -730,28 +779,34 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
             })}
           </div>
 
-          {/* Subtle Horizontal Shield Plates on Ground in front of Player (5 Plates, Duel Masters style) */}
-          <div className="w-full flex items-center justify-center space-x-1.5 mt-0.5 opacity-80 pointer-events-none">
+          {/* PLAYER FLOOR SHIELDS: 5 Horizontal Cyan Shield Cards (Duel Masters style: IMG_9585) */}
+          <div className="w-full flex items-center justify-center space-x-2 py-0.5 pointer-events-none">
             {Array.from({ length: 5 }).map((_, idx) => {
               const active = idx < me.barrier;
               return (
                 <div
-                  key={idx}
-                  className={`h-1 rounded-full transition-all ${
+                  key={`me-floor-shield-${idx}`}
+                  className={`w-6 h-8 rounded-sm border transition-all duration-300 flex items-center justify-center ${
                     active
-                      ? 'w-6 bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,0.9)]'
-                      : 'w-4 bg-slate-800 opacity-30'
+                      ? 'bg-gradient-to-b from-cyan-400 via-sky-500 to-blue-700 border-cyan-200 shadow-[0_0_8px_rgba(34,211,238,0.7)]'
+                      : 'bg-slate-900/40 border-slate-700/20 opacity-20'
                   }`}
-                />
+                >
+                  {active && (
+                    <div className="w-3.5 h-5 rounded-xs border border-white/40 bg-white/20 shadow-inner flex items-center justify-center">
+                      <Shield size={8} className="text-cyan-100 fill-cyan-100" />
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
         </div>
 
         {/* ========================================================================= */}
-        {/* 4. BOTTOM-LEFT: Circular Mana Zone (Arcana Orb) & Player Shield Badge     */}
+        {/* 4. BOTTOM-LEFT: Circular Mana Zone, Card Counts, Avatar & Shield Badge    */}
         {/* ========================================================================= */}
-        <div className="absolute bottom-2 left-2 z-40 flex items-center space-x-2 pointer-events-auto">
+        <div className="absolute bottom-1.5 left-2 z-40 flex items-center space-x-2 pointer-events-auto select-none">
           {/* 72px 3D Arcana Orb */}
           <ArcanaGauge
             current={me.currentArcana}
@@ -768,24 +823,70 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
             }
           />
 
-          {/* Player Shield Badge (Duel Masters Blue Shield Plate) */}
+          {/* Player Card Count Bar (Duel Masters Metallic Cyan Bar: IMG_9585) */}
+          <div className="flex items-center space-x-1.5 bg-slate-950/80 backdrop-blur-md px-2 py-1 rounded-full border border-cyan-500/40 shadow-xl text-[8.5px] font-mono text-slate-200">
+            {/* Deck */}
+            <div className="flex items-center space-x-0.5 bg-black/40 px-1.5 py-0.5 rounded border border-white/10" title="自分の山札">
+              <span className="text-amber-400 font-bold">山</span>
+              <span>{me.deck.length}</span>
+            </div>
+            {/* Hand */}
+            <div className="flex items-center space-x-0.5 bg-black/40 px-1.5 py-0.5 rounded border border-white/10" title="自分の手札">
+              <span className="text-cyan-400 font-bold">手</span>
+              <span>{me.hand.length}</span>
+            </div>
+            {/* Graveyard (Clickable) */}
+            <button
+              type="button"
+              onClick={() =>
+                setZoneModal({
+                  isOpen: true,
+                  title: '自分のアーカイブ(墓地)',
+                  zoneType: 'archive',
+                  cards: me.archive,
+                  isOpponent: false,
+                })
+              }
+              className="flex items-center space-x-0.5 bg-purple-950/60 hover:bg-purple-900/80 px-1.5 py-0.5 rounded border border-purple-500/40 text-purple-200 cursor-pointer active:scale-95"
+              title="自分のアーカイブ(墓地)を確認"
+            >
+              <span className="text-purple-400 font-bold">墓</span>
+              <span>{me.archive.length}</span>
+            </button>
+          </div>
+
+          {/* Player Avatar (Duel Masters Cyber Portrait) */}
+          <div className="flex items-center space-x-1.5 bg-slate-950/85 backdrop-blur-md px-2 py-1 rounded-full border border-cyan-400/60 shadow-lg">
+            <div className="w-5 h-5 rounded-full bg-gradient-to-br from-cyan-600 to-blue-900 border border-cyan-300 flex items-center justify-center shadow">
+              <User size={11} className="text-cyan-200" />
+            </div>
+            <span className="text-[9px] font-black text-slate-200 tracking-tight">PLAYER</span>
+          </div>
+
+          {/* Player Pentagon Shield Badge (Duel Masters signature: IMG_9585) */}
           <div
-            className="flex items-center space-x-1.5 bg-slate-950/85 backdrop-blur-md px-2.5 py-1.5 rounded-2xl border-2 border-cyan-400/70 shadow-[0_0_15px_rgba(6,182,212,0.4)] select-none"
+            className="relative w-8 h-9 flex items-center justify-center filter drop-shadow-[0_0_8px_rgba(6,182,212,0.8)] active:scale-95 transition-transform"
             title={`自軍結界シールド: ${me.barrier}/5`}
           >
-            <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-600 to-indigo-900 border border-cyan-300 flex items-center justify-center shadow">
-              <Shield size={11} className="fill-cyan-400 text-cyan-200" />
-            </div>
-            <div className="flex flex-col items-start leading-none">
-              <span className="text-[6.5px] font-black text-cyan-300 tracking-wider uppercase">
-                SHIELD
-              </span>
-              <span className="font-mono font-black text-sm text-white drop-shadow-[0_0_6px_rgba(56,189,248,0.9)]">
-                {me.barrier}
-              </span>
-            </div>
+            <svg viewBox="0 0 40 46" className="w-full h-full fill-cyan-600/90 stroke-cyan-300 stroke-[2.5]">
+              <polygon points="20,1 38,10 32,44 20,40 8,44 2,10" />
+            </svg>
+            <span className="absolute font-mono font-black text-sm text-white drop-shadow-[0_0_4px_rgba(0,0,0,0.8)]">
+              {me.barrier}
+            </span>
           </div>
         </div>
+
+        {/* ========================================================================= */}
+        {/* TOP-LEFT DUEL MASTERS GIANT CARD DETAIL POPUP (IMG_9589)                  */}
+        {/* ========================================================================= */}
+        {inspectedCardData && (
+          <QuickInspectPanel
+            card={inspectedCardData}
+            computedStats={inspectedUnitStats}
+            onClose={() => setSelectedCardId(null)}
+          />
+        )}
 
         {/* ========================================================================= */}
         {/* 5. RIGHT CONTROLS: 3D Turn End Button, Layered Deck & Graveyard (Middle)  */}

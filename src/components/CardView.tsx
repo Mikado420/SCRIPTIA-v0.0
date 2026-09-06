@@ -177,17 +177,16 @@ export const CardView: React.FC<CardViewProps> = ({
           )}
         </div>
 
-        {/* Bottom Combat Stats Bar (ATK / BRK / DEF) */}
+        {/* Bottom Combat Stats Bar (Duel Masters Metallic Power Plate: IMG_9587) */}
         {isUnit && (
-          <div className="grid grid-cols-3 items-center py-0.5 bg-slate-950/95 border-t border-white/15 text-[7px] sm:text-[8.5px] font-black leading-none text-center shadow-inner">
-            <div className="text-red-400 flex items-center justify-center space-x-0.5" title="ATK (攻撃力)">
-              <span>{displayAtk}</span>
+          <div className="grid grid-cols-2 items-center py-1 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border-t border-amber-400/40 text-center shadow-lg">
+            <div className="flex items-center justify-center space-x-0.5 border-r border-white/10" title="ATK (攻撃力)">
+              <span className="text-[7.5px] font-bold text-red-400/80">ATK</span>
+              <span className="text-[10.5px] sm:text-[11.5px] font-black text-red-300 drop-shadow">{displayAtk}</span>
             </div>
-            <div className="text-yellow-400 bg-amber-950/50 py-0.5 rounded mx-0.5" title="BRK (結界破壊力)">
-              <span>{displayBrk}</span>
-            </div>
-            <div className="text-blue-400 flex items-center justify-center space-x-0.5" title="DEF (守備力)">
-              <span>{displayDef}</span>
+            <div className="flex items-center justify-center space-x-0.5" title="DEF (守備力)">
+              <span className="text-[7.5px] font-bold text-blue-400/80">DEF</span>
+              <span className="text-[10.5px] sm:text-[11.5px] font-black text-blue-300 drop-shadow">{displayDef}</span>
             </div>
           </div>
         )}

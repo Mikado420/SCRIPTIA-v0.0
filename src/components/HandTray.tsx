@@ -3,7 +3,7 @@ import { CardView } from './CardView';
 import { CardInstance, GameState, GameAction } from '../types';
 import { getCard } from '../data/cards';
 import { canPlayCard } from '../engine/engineUtils';
-import { Zap, Play, Info, X } from 'lucide-react';
+import { Zap, Play, Info, X, ChevronUp } from 'lucide-react';
 
 interface Props {
   hand: CardInstance[];
@@ -86,13 +86,13 @@ export const HandTray: React.FC<Props> = ({
                     : 'hover:-translate-y-4 hover:scale-110 hover:z-40'
                 }`}
               >
-                {/* Action Buttons Bubble above Selected Card */}
+                {/* Action Buttons Bubble above Selected Card (Duel Masters Plays Style: IMG_9589) */}
                 {isSelected && (
                   <div
-                    className="absolute -top-8 left-1/2 -translate-x-1/2 flex items-center space-x-1 bg-slate-950/95 border border-yellow-400 rounded-full px-2 py-0.5 shadow-2xl z-50 whitespace-nowrap animate-in fade-in zoom-in-90 duration-150"
+                    className="absolute -top-11 left-1/2 -translate-x-1/2 flex items-center space-x-1.5 z-50 whitespace-nowrap animate-in fade-in slide-in-from-bottom-2 duration-150"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    {/* Action 1: Summon / Play */}
+                    {/* Action 1: Neon Green PLAY Button (Duel Masters signature) */}
                     {state.phase === 'ACTION' && (
                       <button
                         type="button"
@@ -106,18 +106,23 @@ export const HandTray: React.FC<Props> = ({
                             onSelect('');
                           }
                         }}
-                        className={`px-2.5 py-1 rounded-full text-[10px] font-black flex items-center space-x-1 shadow transition-all ${
+                        className={`px-3 py-1 rounded-full text-[11px] font-black flex items-center space-x-1 shadow-2xl transition-all ${
                           isPlayableNow
-                            ? 'bg-gradient-to-r from-amber-500 to-yellow-400 hover:brightness-110 text-slate-950 ring-1 ring-yellow-200 animate-pulse active:scale-95 cursor-pointer'
-                            : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                            ? 'bg-gradient-to-r from-emerald-500 via-green-400 to-emerald-500 hover:brightness-110 text-slate-950 ring-2 ring-emerald-300 shadow-[0_0_16px_rgba(52,211,153,0.9)] animate-bounce active:scale-95 cursor-pointer'
+                            : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700 opacity-60'
                         }`}
                       >
-                        <Play size={10} className="fill-current" />
-                        <span>{cardData.type === 'Spell' ? '発動' : cardData.type === 'Rune' ? '設置' : '召喚'}</span>
+                        <ChevronUp size={13} className="stroke-[3]" />
+                        <span>PLAY</span>
+                        {isPlayableNow && (
+                          <span className="text-[8.5px] opacity-85">
+                            ({cardData.type === 'Spell' ? '発動' : cardData.type === 'Rune' ? '設置' : '召喚'})
+                          </span>
+                        )}
                       </button>
                     )}
 
-                    {/* Action 2: Place into Arcana */}
+                    {/* Action 2: Arcana Placement Button */}
                     {state.phase === 'ARCANA_PLACEMENT' && canPlaceArcana && (
                       <button
                         type="button"
@@ -130,36 +135,24 @@ export const HandTray: React.FC<Props> = ({
                             onSelect('');
                           }
                         }}
-                        className="px-2.5 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-full text-[10px] font-black flex items-center space-x-1 shadow active:scale-95 ring-1 ring-blue-300 cursor-pointer"
+                        className="px-3 py-1 bg-gradient-to-r from-blue-600 to-indigo-500 hover:from-blue-500 hover:to-indigo-400 text-white rounded-full text-[11px] font-black flex items-center space-x-1 shadow-xl active:scale-95 ring-2 ring-blue-300 shadow-[0_0_14px_rgba(59,130,246,0.8)] cursor-pointer"
                       >
-                        <Zap size={10} className="fill-yellow-300 text-yellow-300" />
-                        <span>アルカナへ</span>
+                        <Zap size={11} className="fill-yellow-300 text-yellow-300" />
+                        <span>CHARGE</span>
                       </button>
                     )}
 
-                    {/* Action 3: Inspect */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onInspect(cardData);
-                      }}
-                      title="詳細カード情報"
-                      className="p-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
-                    >
-                      <Info size={11} />
-                    </button>
-
-                    {/* Action 4: Close / Deselect */}
+                    {/* Action 3: Close / Deselect */}
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         onSelect('');
                       }}
-                      className="p-1 rounded-full bg-slate-800 hover:bg-red-950 text-slate-400 hover:text-red-300 transition-colors cursor-pointer"
+                      className="p-1 rounded-full bg-slate-900/90 border border-white/20 hover:bg-red-950 text-slate-400 hover:text-red-300 transition-colors cursor-pointer shadow"
+                      title="選択解除"
                     >
-                      <X size={11} />
+                      <X size={12} />
                     </button>
                   </div>
                 )}
@@ -172,7 +165,9 @@ export const HandTray: React.FC<Props> = ({
                   playable={isPlayableNow || canPlaceArcana}
                   onClick={(e) => {
                     e.stopPropagation();
-                    onSelect(isSelected ? '' : c.instanceId);
+                    const nextSel = isSelected ? '' : c.instanceId;
+                    onSelect(nextSel);
+                    if (nextSel) onInspect(cardData);
                   }}
                   onInspect={() => onInspect(cardData)}
                 />
