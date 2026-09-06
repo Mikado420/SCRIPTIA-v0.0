@@ -15,12 +15,12 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        base: '/SCRIPTIA-v0.0/', // GitHub Pagesのサブパスと完全一致
+        base: './',
         manifest: {
           name: 'SCRIPTIA',
           short_name: 'SCRIPTIA',
-          start_url: '/SCRIPTIA-v0.0/',
-          scope: '/SCRIPTIA-v0.0/',
+          start_url: './',
+          scope: './',
           display: 'standalone',
           orientation: 'landscape',
           background_color: '#0a0e17',
