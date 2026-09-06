@@ -2,7 +2,7 @@ export type System = 'Fire' | 'Water' | 'Earth' | 'Light' | 'Dark' | 'Neutral';
 export type CardType = 'Unit' | 'Spell' | 'Rune' | 'Domain' | 'Evolution';
 export type Lineage = 'Rampage' | 'Mechanoid' | 'Dragon' | 'Merfolk' | 'Aquatica' | 'Leviathan' | 'Bestia' | 'Insect' | 'Titan' | 'Guardian' | 'Oracle' | 'Angel' | 'Parasite' | 'Ghost' | 'Demon' | 'Neutral' | 'None';
 
-export type TargetRequirement = 'opponent_unit' | 'own_unit' | 'any_unit' | 'archive_spell_rune' | 'opponent_rune';
+export type Keyword = 'Guard' | 'Rush' | 'Lethal' | 'CannotAttackPlayer' | 'CannotBeGuarded';
 
 export interface CardTemplate {
   id: string;
@@ -15,9 +15,9 @@ export interface CardTemplate {
   def?: number;
   brk?: number;
   evolutionTarget?: Lineage;
-  keywords?: string[]; // 'Guard', 'Rush', 'Lethal', 'CannotAttackPlayer', 'CannotBeGuarded'
+  keywords?: Keyword[];
   effectText?: string;
-  requiresTarget?: TargetRequirement;
+  targetReq?: 'opponent_unit' | 'own_unit' | 'any_unit' | 'opponent_rune' | 'archive_spell_rune' | 'archive_dark' | 'opponent_domain';
 }
 
 export interface CardInstance {
@@ -25,15 +25,22 @@ export interface CardInstance {
   cardId: string;
 }
 
-export interface UnitState {
-  instanceId: string; 
-  cards: CardInstance[]; // index 0 is top card
-  isRested: boolean;
-  hasSummoningSickness: boolean;
-  modifiers: { atk: number; def: number; brk: number };
+export interface UnitModifier {
+  sourceId: string;
+  atk: number;
+  def: number;
+  brk: number;
+  duration: 'UNTIL_TURN_END' | 'UNTIL_NEXT_TURN_END' | 'PERMANENT';
+  cannotUntapUntilNextOpponentTurnEnd?: boolean;
 }
 
-export type Phase = 'TURN_START' | 'DRAW' | 'ARCANA_PLACEMENT' | 'ACTION' | 'END';
+export interface UnitState {
+  instanceId: string;
+  cards: CardInstance[];
+  isRested: boolean;
+  hasSummoningSickness: boolean;
+  modifiers: UnitModifier[];
+}
 
 export interface PlayerState {
   id: string;
@@ -49,11 +56,14 @@ export interface PlayerState {
   archive: CardInstance[];
 }
 
-export interface Prompt {
-  type: 'GUARD' | 'SELECT_TARGET';
+export type Phase = 'TURN_START' | 'DRAW' | 'ARCANA_PLACEMENT' | 'ACTION' | 'END';
+
+export interface PromptState {
+  type: 'GUARD' | 'TRIGGER' | 'RUNE_TRIGGER';
   playerId: string;
   attackerId?: string;
   sourceId?: string;
+  message?: string;
   validTargets?: string[];
 }
 
@@ -64,17 +74,20 @@ export interface GameState {
   turnCount: number;
   phase: Phase;
   log: string[];
-  prompt: Prompt | null;
+  prompt: PromptState | null;
   winner: string | null;
-  hasPlacedArcanaThisTurn: boolean;
+  flags: {
+    hasPlacedArcanaThisTurn: boolean;
+    domain15Used: boolean;
+  };
 }
 
 export type GameAction = 
+  | { type: 'START_GAME' }
   | { type: 'NEXT_PHASE' }
   | { type: 'PLACE_ARCANA'; instanceId: string }
-  | { type: 'PLAY_CARD'; instanceId: string; targetId?: string }
+  | { type: 'PLAY_CARD'; instanceId: string; targetId?: string; evolutionTargetId?: string }
   | { type: 'DECLARE_ATTACK'; attackerId: string; targetId?: string } 
-  | { type: 'RESOLVE_GUARD'; guarderId?: string } 
-  | { type: 'TRIGGER_RUNE'; runeInstanceId: string; targetId?: string }
-  | { type: 'DEBUG_DRAW'; playerId: string }
+  | { type: 'RESOLVE_GUARD'; guarderId?: string }
+  | { type: 'RESOLVE_TRIGGER'; apply: boolean; targetId?: string }
   ;
