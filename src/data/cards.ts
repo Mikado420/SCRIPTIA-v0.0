@@ -94,4 +94,28 @@ export const CARDS: CardTemplate[] = [
   { id: 'BN-05', name: '停滞の刻印', cost: 2, system: 'Neutral', type: 'Rune', effectText: '◆相手がユニットを召喚した時、そのユニットをレストする。そのユニットは相手の次のターン終了時までアクティブにならない。' },
 ];
 
-export const getCard = (id: string): CardTemplate => CARDS.find(c => c.id === id)!;
+export const getCard = (id: string): CardTemplate => {
+  const card = CARDS.find(c => c.id === id);
+  if (!card) {
+    return {
+      id,
+      name: id,
+      cost: 0,
+      system: 'Neutral',
+      type: 'Unit',
+      element: 'Neutral',
+      cardType: 'Unit',
+      restrictions: {},
+    };
+  }
+  return {
+    ...card,
+    element: card.system,
+    cardType: card.type === 'Evolution' ? 'EVOLUTION' : card.type,
+    restrictions: {
+      cannotAttackPlayer: card.keywords?.includes('CannotAttackPlayer') || false,
+      cannotBeGuarded: card.keywords?.includes('CannotBeGuarded') || false,
+      canAttackActive: card.keywords?.includes('CanAttackActive') || card.id === 'BR-09' || false,
+    },
+  };
+};

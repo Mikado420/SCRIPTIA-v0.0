@@ -220,6 +220,155 @@ function assert(condition: boolean, testName: string, detail?: string) {
   assert(true, 'テスト10: iPhone 13 横画面（844x390）オートフィット・touch-action: none 実装確認');
 }
 
+// ==========================================
+// SCRIPTIA Ver 0.07 思考型AIエンジン必須検証
+// ==========================================
+import { ScriptiaAIEngine, toBoardUnit } from '../src/engine/aiEngine';
+
+// Test 11: AI自爆根絶チェック（ATK < DEFの攻撃は除外される）
+{
+  const state = createInitialState();
+  state.currentPlayer = 'player2';
+  // AI attacker: 20 ATK / 20 DEF (no lethal)
+  state.player2.field = [{
+    instanceId: 'ai-small',
+    cards: [{ instanceId: 'c1', cardId: 'BN-01' }], // 20 ATK / 20 DEF, cannotAttackPlayer
+    isRested: false,
+    hasSummoningSickness: false,
+    modifiers: [],
+  }];
+  // Human defender: 40 ATK / 40 DEF, rested
+  state.player1.field = [{
+    instanceId: 'player-big',
+    cards: [{ instanceId: 'c2', cardId: 'BW-06' }], // 40 ATK / 40 DEF
+    isRested: true,
+    hasSummoningSickness: false,
+    modifiers: [],
+  }];
+
+  const bestAttack = ScriptiaAIEngine.selectBestAttack(state);
+  assert(
+    bestAttack === null,
+    'テスト11: AI自爆根絶（ATK < DEF の無謀な攻撃を完全除外）'
+  );
+}
+
+// Test 12: 有利トレードの積極採択（ATK > DEFで無傷破壊）
+{
+  const state = createInitialState();
+  state.currentPlayer = 'player2';
+  // AI attacker: 50 ATK / 30 DEF (BR-06)
+  state.player2.field = [{
+    instanceId: 'ai-strong',
+    cards: [{ instanceId: 'c-strong', cardId: 'BR-06' }], // 50 ATK / 30 DEF
+    isRested: false,
+    hasSummoningSickness: false,
+    modifiers: [],
+  }];
+  // Human defender: 20 ATK / 20 DEF, rested (BW-01)
+  state.player1.field = [{
+    instanceId: 'player-rested',
+    cards: [{ instanceId: 'c-rested', cardId: 'BW-01' }], // 20 ATK / 20 DEF
+    isRested: true,
+    hasSummoningSickness: false,
+    modifiers: [],
+  }];
+  state.player1.barrier = 4;
+
+  const bestAttack = ScriptiaAIEngine.selectBestAttack(state);
+  assert(
+    bestAttack !== null && bestAttack.targetType === 'UNIT' && bestAttack.targetUnit?.instanceId === 'player-rested',
+    'テスト12: 有利トレード（敵レストユニットへの無傷一方的破壊）優先選択'
+  );
+}
+
+// Test 13: 結界0時のリーサル絶対判定（score: 999999）
+{
+  const state = createInitialState();
+  state.currentPlayer = 'player2';
+  state.player1.barrier = 0; // Lethal opportunity!
+  state.player2.field = [{
+    instanceId: 'ai-finisher',
+    cards: [{ instanceId: 'c-fin', cardId: 'BR-01' }], // 20 ATK / 20 DEF, can attack player
+    isRested: false,
+    hasSummoningSickness: false,
+    modifiers: [],
+  }];
+  state.player1.field = []; // No guardians
+
+  const bestAttack = ScriptiaAIEngine.selectBestAttack(state);
+  assert(
+    bestAttack !== null && bestAttack.targetType === 'PLAYER' && bestAttack.score >= 999999,
+    'テスト13: 結界0時のリーサル直接攻撃（勝利確定スコア999999判定）'
+  );
+}
+
+// Test 14: ルーン警戒補正（伏せルーンがある場合、低ATKの小型ユニットから囮攻撃）
+{
+  const state = createInitialState();
+  state.currentPlayer = 'player2';
+  state.player1.barrier = 3;
+  state.player1.runes = [{ instanceId: 'rune-trap', cardId: 'BN-05' }]; // Trap rune set!
+
+  // Small unit: 10 ATK (BR-03)
+  const smallAttacker = {
+    instanceId: 'ai-small',
+    cards: [{ instanceId: 'c-small', cardId: 'BR-03' }], // 10 ATK / 10 DEF
+    isRested: false,
+    hasSummoningSickness: false,
+    modifiers: [],
+  };
+  // Big unit: 50 ATK (BR-06)
+  const bigAttacker = {
+    instanceId: 'ai-big',
+    cards: [{ instanceId: 'c-big', cardId: 'BR-06' }], // 50 ATK / 30 DEF
+    isRested: false,
+    hasSummoningSickness: false,
+    modifiers: [],
+  };
+
+  state.player2.field = [bigAttacker, smallAttacker];
+  state.player1.field = [];
+
+  const bestAttack = ScriptiaAIEngine.selectBestAttack(state);
+  assert(
+    bestAttack !== null && bestAttack.attacker.instanceId === 'ai-small',
+    'テスト14: ルーン警戒（伏せルーンがある時は低ATK小型ユニットを囮攻撃に選定）'
+  );
+}
+
+// Test 15: 守護（迎撃）判断ルーチン
+{
+  const state = createInitialState();
+  state.player2.barrier = 2;
+
+  // Attacker has 20 ATK / 2 BRK
+  const attackerUnit = {
+    instanceId: 'player-atk',
+    cards: [{ instanceId: 'c-atk', cardId: 'BR-01' }],
+    isRested: true,
+    hasSummoningSickness: false,
+    modifiers: [],
+  };
+  const attacker = toBoardUnit(state, 'player1', attackerUnit);
+
+  // Guardian has 30 DEF (> 20 ATK)
+  const guardianUnit = {
+    instanceId: 'ai-guard',
+    cards: [{ instanceId: 'c-guard', cardId: 'BW-02' }], // Guard unit
+    isRested: false,
+    hasSummoningSickness: false,
+    modifiers: [],
+  };
+  const guardian = toBoardUnit(state, 'player2', guardianUnit);
+
+  const chosenGuard = ScriptiaAIEngine.shouldGuard(state, attacker, [guardian]);
+  assert(
+    chosenGuard !== null && chosenGuard.instanceId === 'ai-guard',
+    'テスト15: 守護判断ルーチン（DEF > ATK の迎撃で確実に自滅させる守護を発動）'
+  );
+}
+
 console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 console.log(`結果: 全${passCount + failCount}件中 ${passCount}件 PASS / ${failCount}件 FAIL`);
 console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);

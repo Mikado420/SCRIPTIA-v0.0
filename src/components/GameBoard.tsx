@@ -13,8 +13,11 @@ import { getCard } from '../data/cards';
 import { calculateUnitStats, canPlayCard } from '../engine/engineUtils';
 import { canUnitGuard, isValidAttackTarget } from '../engine/combatEngine';
 import { getValidSpellTargets } from '../engine/spellSystem';
+import { ScriptiaAIEngine, toBoardUnit, getAIPlayableCards, getAIPlayAction } from '../engine/aiEngine';
 import { History, X, Shield, Sparkles, Sword, Zap, Palette, User, Menu, BookOpen, Volume2, VolumeX } from 'lucide-react';
 import { soundManager } from '../utils/soundManager';
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 interface Props {
   state: GameState;
@@ -256,6 +259,214 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
     }
     prevPlayerBarrier.current = me.barrier;
   }, [me.barrier]);
+
+  // AI Thinking & Autonomous Turn State
+  const [aiThinkingText, setAiThinkingText] = useState<string | null>(null);
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const isRunningAITurnRef = useRef(false);
+
+  // Automated AI Reaction to Prompts (Guard / Trigger)
+  useEffect(() => {
+    if (state.winner) return;
+
+    if (state.prompt && state.prompt.playerId === 'player2') {
+      const timer = setTimeout(() => {
+        if (!stateRef.current.prompt || stateRef.current.prompt.playerId !== 'player2') return;
+
+        if (stateRef.current.prompt.type === 'GUARD') {
+          const oppState = stateRef.current.player2;
+          const guarders = oppState.field
+            .map(u => toBoardUnit(stateRef.current, 'player2', u))
+            .filter(u => !u.isRested && canUnitGuard(u));
+
+          if (guarders.length === 0) {
+            dispatch({ type: 'RESOLVE_GUARD' });
+            return;
+          }
+
+          let attacker = toBoardUnit(stateRef.current, 'player1', stateRef.current.player1.field[0]);
+          if (stateRef.current.prompt.attackerId) {
+            const aFound = stateRef.current.player1.field.find(u => u.instanceId === stateRef.current.prompt!.attackerId);
+            if (aFound) attacker = toBoardUnit(stateRef.current, 'player1', aFound);
+          }
+
+          const chosen = ScriptiaAIEngine.shouldGuard(stateRef.current, attacker, guarders);
+          if (chosen) {
+            showToast(`相手が【${chosen.card.name}】で守護を発動！`, 'info');
+            soundManager.playShieldBreak();
+            dispatch({ type: 'RESOLVE_GUARD', guarderId: chosen.instanceId });
+          } else {
+            dispatch({ type: 'RESOLVE_GUARD' });
+          }
+        } else if (stateRef.current.prompt.type === 'TRIGGER' || stateRef.current.prompt.type === 'RUNE_TRIGGER') {
+          showToast('相手がルーン効果を発動！', 'warn');
+          soundManager.playRuneTrigger();
+          dispatch({ type: 'RESOLVE_TRIGGER', apply: true });
+        }
+      }, 700);
+      return () => clearTimeout(timer);
+    }
+  }, [state.prompt, state.winner]);
+
+  // Automated AI Turn Sequencer (Ver 0.07 Heuristic Engine with Human Pacing)
+  useEffect(() => {
+    if (state.winner) return;
+    if (state.currentPlayer === 'player2' && !state.prompt && !isRunningAITurnRef.current) {
+      runAITurnSequence();
+    }
+  }, [state.currentPlayer, state.turnCount, state.phase, state.prompt, state.winner]);
+
+  const runAITurnSequence = async () => {
+    if (isRunningAITurnRef.current) return;
+    isRunningAITurnRef.current = true;
+
+    try {
+      // ----------------------------------------
+      // フェーズ1：マナチャージ思考
+      // ----------------------------------------
+      if (stateRef.current.phase === 'ARCANA_PLACEMENT' && !stateRef.current.flags.hasPlacedArcanaThisTurn) {
+        setAiThinkingText('アルカナチャージを思考中...');
+        await sleep(1000);
+        if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) return;
+
+        const cardToCharge = ScriptiaAIEngine.selectManaChargeCard(stateRef.current.player2);
+        if (cardToCharge) {
+          showToast(`相手がアルカナに【${cardToCharge.name}】を配置`, 'info');
+          soundManager.playManaCharge();
+          dispatch({ type: 'PLACE_ARCANA', instanceId: cardToCharge.instanceId });
+          await sleep(800);
+        } else {
+          dispatch({ type: 'NEXT_PHASE' });
+          await sleep(600);
+        }
+      }
+
+      if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) return;
+
+      // ----------------------------------------
+      // フェーズ2：展開（召喚・スペル・進化）ループ
+      // ----------------------------------------
+      let canContinuePlay = true;
+      let playLoopCount = 0;
+      while (canContinuePlay && playLoopCount < 8) {
+        if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) return;
+        while (stateRef.current.prompt) {
+          await sleep(300);
+          if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) return;
+        }
+
+        const playable = getAIPlayableCards(stateRef.current);
+        if (playable.length === 0 || stateRef.current.player2.field.length >= 6) {
+          canContinuePlay = false;
+          break;
+        }
+
+        // 最もコスト効率・戦力効率の高いカードを1枚選定してプレイ
+        const bestCardToPlay = [...playable].sort((a, b) => b.cost - a.cost)[0];
+        setAiThinkingText(`【${bestCardToPlay.name}】を展開中...`);
+        await sleep(1000);
+
+        if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) return;
+
+        const playAction = getAIPlayAction(stateRef.current, bestCardToPlay);
+        const isEvolution = bestCardToPlay.type === 'Evolution';
+
+        if (isEvolution) {
+          soundManager.playEvolve();
+          showToast(`相手が【${bestCardToPlay.name}】へ進化！`, 'warn');
+        } else if (bestCardToPlay.type === 'Spell') {
+          soundManager.playCardSwipe();
+          showToast(`相手がスペル【${bestCardToPlay.name}】を詠唱！`, 'info');
+        } else {
+          soundManager.playSummonUnit();
+          showToast(`相手が【${bestCardToPlay.name}】を召喚！`, 'info');
+        }
+
+        dispatch(playAction);
+        playLoopCount++;
+        await sleep(1000);
+      }
+
+      if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) return;
+
+      // ----------------------------------------
+      // フェーズ3：攻撃ループ（自爆回避・有利トレード）
+      // ----------------------------------------
+      let canContinueAttack = true;
+      let attackLoopCount = 0;
+      while (canContinueAttack && attackLoopCount < 8) {
+        if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) return;
+        while (stateRef.current.prompt) {
+          await sleep(300);
+          if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) return;
+        }
+
+        const bestAttack = ScriptiaAIEngine.selectBestAttack(stateRef.current);
+        if (!bestAttack) {
+          canContinueAttack = false;
+          break;
+        }
+
+        setAiThinkingText(bestAttack.reason);
+        setActiveAttackerId(bestAttack.attacker.instanceId);
+        soundManager.playAttackLock();
+        await sleep(600);
+
+        if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) {
+          setActiveAttackerId(null);
+          return;
+        }
+
+        // 攻撃の実行
+        soundManager.playAttackClash();
+        setIsScreenShaking(true);
+        setTimeout(() => setIsScreenShaking(false), 380);
+
+        if (bestAttack.targetType === 'PLAYER') {
+          showToast(`相手の【${bestAttack.attacker.card.name}】がプレイヤーへ直接攻撃！`, 'warn');
+          dispatch({ type: 'DECLARE_ATTACK', attackerId: bestAttack.attacker.instanceId });
+        } else if (bestAttack.targetUnit) {
+          showToast(`相手の【${bestAttack.attacker.card.name}】が【${bestAttack.targetUnit.card.name}】へ攻撃！`, 'warn');
+          dispatch({
+            type: 'DECLARE_ATTACK',
+            attackerId: bestAttack.attacker.instanceId,
+            targetId: bestAttack.targetUnit.instanceId,
+          });
+        }
+
+        setActiveAttackerId(null);
+        attackLoopCount++;
+
+        // Wait for attack / guard / triggers to resolve
+        await sleep(1100);
+        while (stateRef.current.prompt) {
+          await sleep(300);
+          if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) return;
+        }
+      }
+
+      if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) return;
+
+      // ----------------------------------------
+      // フェーズ4：ターン終了
+      // ----------------------------------------
+      setAiThinkingText('ターン終了');
+      await sleep(800);
+      if (stateRef.current.currentPlayer === 'player2' && !stateRef.current.winner) {
+        dispatch({ type: 'NEXT_PHASE' });
+      }
+    } catch (err) {
+      console.error('[AI Turn Sequence Error]', err);
+      if (stateRef.current.currentPlayer === 'player2' && !stateRef.current.winner) {
+        dispatch({ type: 'NEXT_PHASE' });
+      }
+    } finally {
+      isRunningAITurnRef.current = false;
+      setAiThinkingText(null);
+      setActiveAttackerId(null);
+    }
+  };
 
   const triggerCutin = (card: CardTemplate, title: string) => {
     setCutinCard({ card, title });
@@ -2005,6 +2216,16 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
             {/* Cross Laser Slash */}
             <div className="absolute w-44 h-1 bg-white shadow-[0_0_20px_rgba(255,255,255,1)] rotate-45" />
             <div className="absolute w-44 h-1 bg-white shadow-[0_0_20px_rgba(255,255,255,1)] -rotate-45" />
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* AI THINKING STATUS HUD (Pulsing badge during opponent's turn)             */}
+        {/* ========================================================================= */}
+        {!isMyTurn && !state.winner && (
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-40 pointer-events-none flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-950/90 border border-amber-400/60 shadow-[0_0_20px_rgba(245,158,11,0.4)] text-amber-200 text-[11px] font-bold tracking-wide backdrop-blur animate-pulse">
+            <Sparkles size={13} className="text-amber-400 animate-spin" style={{ animationDuration: '3s' }} />
+            <span>{aiThinkingText || '相手AIが思考中...'}</span>
           </div>
         )}
 

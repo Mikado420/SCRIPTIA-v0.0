@@ -18,11 +18,25 @@ export interface CardTemplate {
   keywords?: Keyword[];
   effectText?: string;
   targetReq?: 'opponent_unit' | 'own_unit' | 'any_unit' | 'opponent_rune' | 'archive_spell_rune' | 'archive_dark' | 'opponent_domain';
+  // Compatibility fields for AI engine
+  element?: System | string;
+  cardType?: CardType | string;
+  restrictions?: {
+    cannotAttackPlayer?: boolean;
+    cannotBeGuarded?: boolean;
+    canAttackActive?: boolean;
+  };
 }
+
+export type Card = CardTemplate;
 
 export interface CardInstance {
   instanceId: string;
   cardId: string;
+  element?: System | string;
+  cost?: number;
+  name?: string;
+  card?: CardTemplate;
 }
 
 export interface UnitModifier {
@@ -40,6 +54,17 @@ export interface UnitState {
   isRested: boolean;
   hasSummoningSickness: boolean;
   modifiers: UnitModifier[];
+  card?: CardTemplate;
+  currentAtk?: number;
+  currentDef?: number;
+  currentBrk?: number;
+}
+
+export interface BoardUnit extends UnitState {
+  card: CardTemplate;
+  currentAtk?: number;
+  currentDef?: number;
+  currentBrk?: number;
 }
 
 export interface PlayerState {
@@ -74,6 +99,10 @@ export interface PromptState {
 export interface GameState {
   player1: PlayerState;
   player2: PlayerState;
+  player?: PlayerState;
+  opponent?: PlayerState;
+  turnPlayer?: 'player' | 'opponent' | 'player1' | 'player2';
+  gameOver?: boolean;
   currentPlayer: 'player1' | 'player2';
   turnCount: number;
   phase: Phase;
