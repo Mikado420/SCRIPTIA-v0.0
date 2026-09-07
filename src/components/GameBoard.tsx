@@ -340,7 +340,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
       if (!state.flags.hasPlacedArcanaThisTurn && isMyTurn) {
         soundManager.playManaCharge();
         dispatch({ type: 'PLACE_ARCANA', instanceId: card.instanceId });
-        showToast('⚡ アルカナ充填！ (+1 ARCANA)', 'success');
+        showToast('⚡ アルカナ充填！ 行動フェーズへ移行', 'success');
         setSelectedCardId(null);
       } else {
         showToast('今ターンはすでにアルカナを充填済みです', 'warn');
@@ -858,6 +858,16 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
       return;
     }
 
+    // Target selection mode active prompt
+    if (state.prompt?.type === 'TARGET_SELECTION') {
+      if (state.prompt.validTargets.includes(id)) {
+        soundManager.playCardSwipe();
+        dispatch({ type: 'RESOLVE_SPELL_TARGET', targetId: id });
+        setSelectedCardId(null);
+        return;
+      }
+    }
+
     // Action Phase
     if (state.phase === 'ACTION') {
       const inHand = me.hand.find(c => c.instanceId === id);
@@ -887,7 +897,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
             });
             return;
           }
-          // Board-targeted spells (opponent unit target)
+          // Board-targeted spells (opponent unit target or domain/rune target)
           setSelectedCardId(id === selectedCardId ? null : id);
           return;
         }
@@ -941,6 +951,39 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
         }
       }
 
+      // Opponent Domain clicked
+      if (opp.domain && opp.domain.instanceId === id) {
+        if (selectedCardId) {
+          const selHand = me.hand.find(c => c.instanceId === selectedCardId);
+          if (selHand) {
+            const spellTpl = getCard(selHand.cardId);
+            if (spellTpl.id === 'BN-03') {
+              triggerCutin(spellTpl, '呪文詠唱！');
+              dispatch({ type: 'PLAY_CARD', instanceId: selectedCardId, targetId: id });
+              setSelectedCardId(null);
+              return;
+            }
+          }
+        }
+      }
+
+      // Opponent Rune clicked
+      const clickedRune = opp.runes.find(r => r.instanceId === id);
+      if (clickedRune) {
+        if (selectedCardId) {
+          const selHand = me.hand.find(c => c.instanceId === selectedCardId);
+          if (selHand) {
+            const spellTpl = getCard(selHand.cardId);
+            if (spellTpl.id === 'BN-04') {
+              triggerCutin(spellTpl, '呪文詠唱！');
+              dispatch({ type: 'PLAY_CARD', instanceId: selectedCardId, targetId: id });
+              setSelectedCardId(null);
+              return;
+            }
+          }
+        }
+      }
+
       // Opponent Unit clicked
       const inOppField = opp.field.find(c => c.instanceId === id);
       if (inOppField && selectedCardId) {
@@ -967,12 +1010,34 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
     }
   };
 
+  const handleRestartGame = () => {
+    soundManager.playCardSwipe();
+    setPreviewCard(null);
+    setPreviewStats(undefined);
+    setSelectedCardId(null);
+    setAttackDrag(null);
+    setActiveAttackerId(null);
+    setArcanaMode(false);
+    dispatch({ type: 'START_GAME' });
+  };
+
   const handlePlayHandCard = (instanceId: string) => {
     const cardInst = me.hand.find(c => c.instanceId === instanceId);
     if (cardInst) {
       const tpl = getCard(cardInst.cardId);
-      if (tpl.type === 'Spell' && tpl.targetReq) {
-        handleCardClick(instanceId, { stopPropagation: () => {} } as any);
+      if (tpl.type === 'Spell') {
+        if (tpl.id === 'BW-13') {
+          handleCardClick(instanceId, { stopPropagation: () => {} } as any);
+          return;
+        }
+        triggerCutin(tpl, '呪文詠唱！');
+        if (tpl.targetReq) {
+          dispatch({ type: 'START_SPELL_CAST', instanceId });
+          setSelectedCardId(instanceId);
+        } else {
+          dispatch({ type: 'PLAY_CARD', instanceId });
+          setSelectedCardId(null);
+        }
         return;
       }
       if (tpl.type === 'Evolution') {
@@ -985,8 +1050,6 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
         if (tpl.effectText && (tpl.keywords?.includes('Rush') || tpl.effectText.includes('登場時'))) {
           triggerCutin(tpl, '登場時効果発動！');
         }
-      } else if (tpl.type === 'Spell') {
-        triggerCutin(tpl, '呪文詠唱！');
       }
     }
     dispatch({ type: 'PLAY_CARD', instanceId });
@@ -1206,56 +1269,94 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
         {/* Top-Left: Opponent Domain & Runes (Candidate B: 52px x 70px) */}
         <div className="absolute top-11 left-2.5 z-20 flex items-start space-x-1.5 pointer-events-auto select-none">
           {/* Opponent Domain */}
-          <div className="flex flex-col items-center">
-            <span className="text-[7px] font-black text-amber-400 uppercase tracking-wider mb-0.5">DOMAIN</span>
-            {opp.domain ? (
-              <div
-                className="w-[52px] h-[70px] rounded-md border border-amber-400/60 overflow-hidden shadow-lg cursor-pointer transition-transform hover:scale-105 active:scale-95"
-                onPointerDown={(e) => handleSlotCardPointerDown(getCard(opp.domain!.cardId), opp.domain!.instanceId, e)}
-                onPointerMove={handleSlotCardPointerMove}
-                onPointerUp={(e) => handleSlotCardPointerUp(opp.domain!.instanceId, e)}
-                onPointerCancel={clearSlotLongPressTimer}
-              >
-                <CardView instance={opp.domain} size="compact" onInspect={() => {}} />
+          {(() => {
+            const isDomainTarget = !!opp.domain && (
+              (state.prompt?.type === 'TARGET_SELECTION' && state.prompt.validTargets.includes(opp.domain.instanceId)) ||
+              (!!selectedCardId && me.hand.some(c => c.instanceId === selectedCardId && getCard(c.cardId).id === 'BN-03'))
+            );
+            return (
+              <div className="flex flex-col items-center">
+                <span className={`text-[7px] font-black uppercase tracking-wider mb-0.5 ${isDomainTarget ? 'text-yellow-300 animate-pulse' : 'text-amber-400'}`}>
+                  DOMAIN {isDomainTarget ? '★TARGET' : ''}
+                </span>
+                {opp.domain ? (
+                  <div
+                    className={`w-[52px] h-[70px] rounded-md border overflow-hidden shadow-lg transition-transform ${
+                      isDomainTarget
+                        ? 'border-yellow-400 ring-2 ring-yellow-400 animate-pulse scale-105 shadow-[0_0_20px_rgba(250,204,21,0.9)] cursor-pointer z-30'
+                        : 'border-amber-400/60 cursor-pointer hover:scale-105 active:scale-95'
+                    }`}
+                    onClick={(e) => {
+                      if (isDomainTarget) {
+                        e.stopPropagation();
+                        soundManager.playCardSwipe();
+                        if (state.prompt?.type === 'TARGET_SELECTION') {
+                          dispatch({ type: 'RESOLVE_SPELL_TARGET', targetId: opp.domain!.instanceId });
+                        } else if (selectedCardId) {
+                          dispatch({ type: 'PLAY_CARD', instanceId: selectedCardId, targetId: opp.domain!.instanceId });
+                          setSelectedCardId(null);
+                        }
+                      }
+                    }}
+                    onPointerDown={(e) => !isDomainTarget && handleSlotCardPointerDown(getCard(opp.domain!.cardId), opp.domain!.instanceId, e)}
+                    onPointerMove={!isDomainTarget ? handleSlotCardPointerMove : undefined}
+                    onPointerUp={(e) => !isDomainTarget && handleSlotCardPointerUp(opp.domain!.instanceId, e)}
+                    onPointerCancel={clearSlotLongPressTimer}
+                  >
+                    <CardView instance={opp.domain} size="compact" onInspect={() => {}} />
+                  </div>
+                ) : (
+                  <div className="w-[52px] h-[70px] rounded-md border border-dashed border-amber-400/25 bg-amber-950/20 flex flex-col items-center justify-center text-[8px] text-amber-400/40 font-bold">
+                    <span>空</span>
+                    <span className="text-[6px] tracking-tighter opacity-60">DOMAIN</span>
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="w-[52px] h-[70px] rounded-md border border-dashed border-amber-400/25 bg-amber-950/20 flex flex-col items-center justify-center text-[8px] text-amber-400/40 font-bold">
-                <span>空</span>
-                <span className="text-[6px] tracking-tighter opacity-60">DOMAIN</span>
-              </div>
-            )}
-          </div>
+            );
+          })()}
 
           {/* Opponent Runes (2 Sockets, Candidate B: 52px x 70px) */}
           <div className="flex flex-col items-center">
             <span className="text-[7px] font-black text-slate-400 uppercase tracking-wider mb-0.5">RUNES</span>
             <div className="flex space-x-1">
-              {opp.runes[0] ? (
-                <div
-                  className="w-[52px] h-[70px] rounded-md border border-slate-600/60 overflow-hidden shadow cursor-pointer transition-transform hover:scale-105 active:scale-95"
-                  onClick={(e) => handleCardClick(opp.runes[0].instanceId, e)}
-                >
-                  <CardView isFaceDown size="compact" onInspect={() => {}} />
-                </div>
-              ) : (
-                <div className="w-[52px] h-[70px] rounded-md border border-dashed border-white/20 bg-black/30 flex flex-col items-center justify-center text-[8px] text-white/30 font-bold">
-                  <span>1</span>
-                  <span className="text-[6px] tracking-tighter opacity-50">RUNE</span>
-                </div>
-              )}
-              {opp.runes[1] ? (
-                <div
-                  className="w-[52px] h-[70px] rounded-md border border-slate-600/60 overflow-hidden shadow cursor-pointer transition-transform hover:scale-105 active:scale-95"
-                  onClick={(e) => handleCardClick(opp.runes[1].instanceId, e)}
-                >
-                  <CardView isFaceDown size="compact" onInspect={() => {}} />
-                </div>
-              ) : (
-                <div className="w-[52px] h-[70px] rounded-md border border-dashed border-white/20 bg-black/30 flex flex-col items-center justify-center text-[8px] text-white/30 font-bold">
-                  <span>2</span>
-                  <span className="text-[6px] tracking-tighter opacity-50">RUNE</span>
-                </div>
-              )}
+              {[0, 1].map((rIdx) => {
+                const rune = opp.runes[rIdx];
+                const isRuneTarget = !!rune && (
+                  (state.prompt?.type === 'TARGET_SELECTION' && state.prompt.validTargets.includes(rune.instanceId)) ||
+                  (!!selectedCardId && me.hand.some(c => c.instanceId === selectedCardId && getCard(c.cardId).id === 'BN-04'))
+                );
+                return rune ? (
+                  <div
+                    key={rune.instanceId}
+                    className={`w-[52px] h-[70px] rounded-md border overflow-hidden shadow transition-transform ${
+                      isRuneTarget
+                        ? 'border-yellow-400 ring-2 ring-yellow-400 animate-pulse scale-105 shadow-[0_0_20px_rgba(250,204,21,0.9)] cursor-pointer z-30'
+                        : 'border-slate-600/60 cursor-pointer hover:scale-105 active:scale-95'
+                    }`}
+                    onClick={(e) => {
+                      if (isRuneTarget) {
+                        e.stopPropagation();
+                        soundManager.playCardSwipe();
+                        if (state.prompt?.type === 'TARGET_SELECTION') {
+                          dispatch({ type: 'RESOLVE_SPELL_TARGET', targetId: rune.instanceId });
+                        } else if (selectedCardId) {
+                          dispatch({ type: 'PLAY_CARD', instanceId: selectedCardId, targetId: rune.instanceId });
+                          setSelectedCardId(null);
+                        }
+                      } else {
+                        handleCardClick(rune.instanceId, e);
+                      }
+                    }}
+                  >
+                    <CardView isFaceDown size="compact" onInspect={() => {}} />
+                  </div>
+                ) : (
+                  <div key={`empty-rune-${rIdx}`} className="w-[52px] h-[70px] rounded-md border border-dashed border-white/20 bg-black/30 flex flex-col items-center justify-center text-[8px] text-white/30 font-bold">
+                    <span>{rIdx + 1}</span>
+                    <span className="text-[6px] tracking-tighter opacity-50">RUNE</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -1330,13 +1431,26 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
           id="center-arena"
           className="absolute inset-x-16 top-9 bottom-4 flex flex-col justify-between items-center px-2 z-10 pointer-events-auto"
         >
-          {/* Guide Banner for Targeted Spells or Combat Attack Target */}
-          {selectedCardId && me.hand.some(c => c.instanceId === selectedCardId && getCard(c.cardId).type === 'Spell' && getCard(c.cardId).targetReq) && (
-            <div className="absolute top-1 z-50 bg-indigo-950/95 border border-cyan-400 px-3 py-0.5 rounded-full shadow-xl text-[9px] font-bold text-cyan-200 flex items-center space-x-1 animate-pulse">
+          {/* Guide Banner for Targeted Spells, Prompt Target, or Combat Attack Target */}
+          {state.prompt?.type === 'TARGET_SELECTION' && (
+            <div className="absolute top-1 z-50 bg-indigo-950/95 border border-yellow-400 px-3.5 py-0.5 rounded-full shadow-xl text-[9px] font-bold text-yellow-300 flex items-center space-x-1 animate-pulse">
               <Zap size={10} className="text-yellow-300" />
-              <span>対象のユニットを選択してください</span>
+              <span>{state.prompt.message || '対象を選択してください'}</span>
             </div>
           )}
+          {!state.prompt && selectedCardId && me.hand.some(c => c.instanceId === selectedCardId && getCard(c.cardId).type === 'Spell' && getCard(c.cardId).targetReq) && (() => {
+            const selCard = me.hand.find(c => c.instanceId === selectedCardId)!;
+            const tpl = getCard(selCard.cardId);
+            const msg = tpl.id === 'BN-03' ? '【ドメイン・ブレイク】破壊する相手のドメイン枠を選択してください'
+                      : tpl.id === 'BN-04' ? '【ルーン・ディスペル】手札に戻す相手のルーン枠を選択してください'
+                      : '対象のユニットを選択してください';
+            return (
+              <div className="absolute top-1 z-50 bg-indigo-950/95 border border-cyan-400 px-3 py-0.5 rounded-full shadow-xl text-[9px] font-bold text-cyan-200 flex items-center space-x-1 animate-pulse">
+                <Zap size={10} className="text-yellow-300" />
+                <span>{msg}</span>
+              </div>
+            );
+          })()}
           {selectedCardId && me.field.some(u => u.instanceId === selectedCardId) && (
             <div className="absolute top-1 z-50 bg-red-950/95 border border-yellow-400 px-3 py-0.5 rounded-full shadow-xl text-[9px] font-bold text-yellow-200 flex items-center space-x-1 animate-pulse">
               <Sword size={10} className="text-yellow-300" />
@@ -2034,16 +2148,27 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
         {/* GAME OVER SCREEN                                                       */}
         {/* ======================================================================= */}
         {state.winner && (
-          <div className="absolute inset-0 bg-black/90 z-[100] flex flex-col items-center justify-center p-4">
-            <h1 className="text-4xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-yellow-600 mb-4 drop-shadow-[0_0_30px_rgba(250,204,21,0.5)]">
-              {state.winner === 'player1' ? 'VICTORY' : 'DEFEAT'}
-            </h1>
-            <button
-              onClick={() => dispatch({ type: 'START_GAME' })}
-              className="bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black py-2 px-6 rounded-full shadow-xl text-xs"
-            >
-              もう一度プレイする
-            </button>
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-md pointer-events-auto select-none p-4">
+            <div className="bg-[#0b1329] border-2 border-cyan-400/80 rounded-2xl p-8 max-w-md w-full text-center shadow-[0_0_50px_rgba(6,182,212,0.6)] relative z-[10000] animate-in zoom-in-95">
+              <h2 className={`text-4xl sm:text-5xl font-black mb-4 tracking-wider drop-shadow-lg ${state.winner === 'player1' ? 'text-amber-400 drop-shadow-[0_0_25px_rgba(251,191,36,0.6)]' : 'text-red-500 drop-shadow-[0_0_25px_rgba(239,68,68,0.6)]'}`}>
+                {state.winner === 'player1' ? 'VICTORY' : 'DEFEAT'}
+              </h2>
+              <p className="text-slate-200 text-sm mb-6 leading-relaxed">
+                {state.winner === 'player1' ? '対戦相手の結界を突破し、見事勝利しました！' : '自軍の結界がすべて破壊されました...'}
+              </p>
+              
+              {/* 確実に押せる「もう一度遊ぶ」ボタン */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleRestartGame();
+                }}
+                className="w-full py-3.5 px-6 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold rounded-xl shadow-[0_0_25px_rgba(6,182,212,0.6)] active:scale-95 transition-all cursor-pointer relative z-[10001] text-sm tracking-wider"
+              >
+                もう一度遊ぶ
+              </button>
+            </div>
           </div>
         )}
       </div>

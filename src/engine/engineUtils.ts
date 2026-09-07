@@ -63,6 +63,26 @@ export const findUnitAndOwner = (state: GameState, instanceId: string) => {
 // Export destroy system functions
 export { destroyUnit, bounceUnit, sendUnitToArcana, registerOnUnitDestroyedListener } from './destroySystem';
 
+export const checkAffinity = (cardElement?: string, arcana: CardInstance[] = []): boolean => {
+  if (!cardElement || cardElement === '無' || cardElement === 'Neutral') return true;
+  const target = cardElement === '火' ? 'Fire' :
+                 cardElement === '水' ? 'Water' :
+                 cardElement === '地' ? 'Earth' :
+                 cardElement === '光' ? 'Light' :
+                 cardElement === '闇' ? 'Dark' : cardElement;
+
+  return arcana.some(a => {
+    const aCard = getCard(a.cardId);
+    const aSys = aCard.system as string;
+    const aEl = aSys === '火' ? 'Fire' :
+                aSys === '水' ? 'Water' :
+                aSys === '地' ? 'Earth' :
+                aSys === '光' ? 'Light' :
+                aSys === '闇' ? 'Dark' : aSys;
+    return aEl === target;
+  });
+};
+
 export const canPlayCard = (
   card: CardTemplate,
   currentArcana: number,
@@ -72,6 +92,5 @@ export const canPlayCard = (
   if (currentArcana < card.cost) return false;
   if (card.type === 'Unit' && fieldUnitCount >= 6) return false;
   if (card.type === 'Evolution' && fieldUnitCount === 0) return false;
-  if (card.system === 'Neutral') return true;
-  return arcana.some(a => getCard(a.cardId).system === card.system);
+  return checkAffinity(card.system, arcana);
 };

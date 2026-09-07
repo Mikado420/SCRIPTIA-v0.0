@@ -1,6 +1,6 @@
 import { GameState, GameAction, PlayerState, CardInstance, UnitState, System } from '../types';
 import { CARDS, getCard } from '../data/cards';
-import { calculateUnitStats, findUnitAndOwner } from './engineUtils';
+import { calculateUnitStats, findUnitAndOwner, checkAffinity } from './engineUtils';
 import { destroyUnit, bounceUnit, sendUnitToArcana } from './destroySystem';
 import {
   resolveCombat,
@@ -76,11 +76,11 @@ export const createInitialState = (): GameState => {
 };
 
 export const gameReducer = (state: GameState, action: GameAction): GameState => {
-  if (state.winner) return state;
-
   if (action.type === 'START_GAME') {
     return createInitialState();
   }
+
+  if (state.winner) return state;
 
   // Deep clone for immutability
   let newState: GameState = JSON.parse(JSON.stringify(state));
@@ -153,6 +153,9 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
       p.currentArcana += 1;
       newState.flags.hasPlacedArcanaThisTurn = true;
       newState.log.push(`${p.id} はアルカナを配置した。`);
+      // アルカナチャージ完了時に自動で行動フェーズ（ACTION PHASE）へ移行
+      newState.phase = 'ACTION';
+      newState.log.push(`${p.id} は行動フェーズに入った。`);
       return newState;
     }
 
@@ -190,9 +193,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
 
       // Check Arcana cost & Affinity for non-spells
       if (p.currentArcana < template.cost) return newState;
-      const hasAffinity =
-        template.system === 'Neutral' ||
-        p.arcana.some(a => getCard(a.cardId).system === template.system);
+      const hasAffinity = checkAffinity(template.system, p.arcana);
       if (!hasAffinity) return newState;
 
       if (template.type === 'Evolution') {
@@ -208,7 +209,6 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
         }
         if (!targetUnit) return newState;
       }
-      if (template.targetReq && !action.targetId && template.type !== 'Evolution') return newState;
 
       p.currentArcana -= template.cost;
       p.hand.splice(cardIdx, 1);
@@ -237,18 +237,39 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
           return newState;
         }
 
-        // On Summon Triggers
-        if (template.id === 'BR-08' && action.targetId) newState = destroyUnit(newState, action.targetId);
-        if (template.id === 'BB-09' && action.targetId) newState = bounceUnit(newState, action.targetId);
+        // On Summon Triggers (Safe resolution without freezing if no targets)
+        if (template.id === 'BR-08') {
+          const validTargets = opp.field.filter(u => calculateUnitStats(newState, oppKey, u).def <= 40);
+          if (validTargets.length > 0) {
+            const targetToDestroy = (action.targetId && validTargets.some(u => u.instanceId === action.targetId))
+              ? action.targetId
+              : validTargets[0].instanceId;
+            newState = destroyUnit(newState, targetToDestroy);
+            newState.log.push(`【クリムゾン・ドラゴン】の登場時効果！DEF40以下の相手ユニットを破壊した。`);
+          } else {
+            newState.log.push(`【クリムゾン・ドラゴン】の登場時効果：対象となるDEF40以下の相手ユニットが存在しないため不発。`);
+          }
+        }
+        if (template.id === 'BB-09') {
+          if (action.targetId && opp.field.some(u => u.instanceId === action.targetId)) {
+            newState = bounceUnit(newState, action.targetId);
+          } else if (opp.field.length > 0) {
+            newState = bounceUnit(newState, opp.field[0].instanceId);
+          }
+        }
         if (['BB-04', 'BW-07'].includes(template.id) && p.deck.length > 0) p.hand.push(p.deck.pop()!);
         if (template.id === 'BG-04' && p.deck.length > 0) {
           p.arcana.push(p.deck.pop()!);
           p.maxArcana++;
           p.currentArcana++;
         }
-        if (template.id === 'BW-05' && action.targetId) {
-          const t = findUnitAndOwner(newState, action.targetId);
-          if (t) t.unit.isRested = true;
+        if (template.id === 'BW-05') {
+          if (action.targetId) {
+            const t = findUnitAndOwner(newState, action.targetId);
+            if (t) t.unit.isRested = true;
+          } else if (opp.field.length > 0) {
+            opp.field[0].isRested = true;
+          }
         }
         if (template.id === 'BD-06' && opp.hand.length > 0) {
           const randIdx = Math.floor(Math.random() * opp.hand.length);

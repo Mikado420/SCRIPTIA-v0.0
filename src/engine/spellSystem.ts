@@ -1,6 +1,6 @@
 import { GameState, CardInstance, CardTemplate, UnitState } from '../types';
 import { getCard } from '../data/cards';
-import { calculateUnitStats, findUnitAndOwner } from './engineUtils';
+import { calculateUnitStats, findUnitAndOwner, checkAffinity } from './engineUtils';
 import { destroyUnit, bounceUnit, sendUnitToArcana } from './destroySystem';
 
 /**
@@ -19,9 +19,7 @@ export const canCastSpell = (
 
   if (p.currentArcana < tpl.cost) return { canCast: false, reason: 'アルカナ（コスト）が不足しています' };
 
-  const hasAffinity =
-    tpl.system === 'Neutral' ||
-    p.arcana.some(a => getCard(a.cardId).system === tpl.system);
+  const hasAffinity = checkAffinity(tpl.system, p.arcana);
 
   if (!hasAffinity) return { canCast: false, reason: '系統条件（アルカナの色）を満たしていません' };
 
@@ -110,9 +108,14 @@ export const startSpellCast = (
   // Place into Pending Card Zone
   p.pendingCard = card;
 
-  // If spell requires a target, set prompt to TARGET_SELECTION
+  // If spell requires a target, check valid targets
   if (tpl.targetReq) {
     const validTargets = getValidSpellTargets(state, tpl.id, card.instanceId);
+    // If no valid targets available, safely resolve as fizzled without freezing
+    if (validTargets.length === 0) {
+      state.log.push(`【${tpl.name}】を発動したが、対象が存在しないため効果は不発となった。`);
+      return resolveSpellCast(state, card.instanceId);
+    }
     state.prompt = {
       type: 'TARGET_SELECTION',
       playerId: state.currentPlayer,
@@ -235,15 +238,27 @@ export const resolveSpellCast = (
         state = destroyUnit(state, targetId);
       }
     }
-  } else if (tpl.id === 'BN-03' && opp.domain) {
-    opp.archive.push(opp.domain);
-    opp.domain = null;
-    state.log.push(`相手のドメインが破壊されアーカイブに送られた。`);
-  } else if (tpl.id === 'BN-04' && targetId) {
-    const rIdx = opp.runes.findIndex(r => r.instanceId === targetId);
-    if (rIdx !== -1) {
-      opp.hand.push(opp.runes.splice(rIdx, 1)[0]);
+  } else if (tpl.id === 'BN-03') {
+    if (opp.domain) {
+      opp.archive.push(opp.domain);
+      opp.domain = null;
+      state.log.push(`相手のドメインが破壊されアーカイブに送られた。`);
+    } else {
+      state.log.push(`相手にドメインが存在しないため、効果は不発となった。`);
+    }
+  } else if (tpl.id === 'BN-04') {
+    let rIdx = -1;
+    if (targetId) {
+      rIdx = opp.runes.findIndex(r => r.instanceId === targetId);
+    } else if (opp.runes.length > 0) {
+      rIdx = 0;
+    }
+    if (rIdx !== -1 && opp.runes[rIdx]) {
+      const bounced = opp.runes.splice(rIdx, 1)[0];
+      opp.hand.push(bounced);
       state.log.push(`相手のルーンが手札に戻された。`);
+    } else {
+      state.log.push(`相手にルーンが存在しないため、効果は不発となった。`);
     }
   }
 
