@@ -50,6 +50,15 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
   const [shatteringOppShieldIdx, setShatteringOppShieldIdx] = useState<number | null>(null);
   const [shatteringPlayerShieldIdx, setShatteringPlayerShieldIdx] = useState<number | null>(null);
 
+  // Spell Target Selection State (v0.07 Fix)
+  const [pendingSpell, setPendingSpell] = useState<{
+    cardInstance: CardInstance;
+    template: CardTemplate;
+    validTargets: string[];
+    targetTypes: ('unit' | 'domain' | 'rune' | 'archive')[];
+    message: string;
+  } | null>(null);
+
   // Hand Drag & Drop States (Play & Arcana Charge)
   const [draggingCard, setDraggingCard] = useState<CardInstance | null>(null);
   const [dragCanvasPos, setDragCanvasPos] = useState<{ x: number; y: number } | null>(null);
@@ -404,6 +413,20 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
 
   // Helper to test if a target is valid for currently selected card or spell
   const isTargetValidForSelected = (targetType: 'unit' | 'domain' | 'rune', targetUnit?: UnitState): boolean => {
+    // 1. Check pendingSpell target selection mode
+    if (pendingSpell) {
+      if (targetType === 'unit' && targetUnit) {
+        return pendingSpell.validTargets.includes(targetUnit.instanceId);
+      }
+      if (targetType === 'domain' && pendingSpell.targetTypes.includes('domain')) {
+        return opp.domain ? pendingSpell.validTargets.includes(opp.domain.instanceId) : false;
+      }
+      if (targetType === 'rune' && pendingSpell.targetTypes.includes('rune')) {
+        return true;
+      }
+      return false;
+    }
+
     if (!selectedCardId) return false;
 
     // Check if target is valid for pending spell
@@ -843,6 +866,26 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
     e.stopPropagation();
     if (!isMyTurn) return;
 
+    // 0. Pending Spell Target Resolution (v0.07 Fix)
+    if (pendingSpell) {
+      if (pendingSpell.validTargets.includes(id)) {
+        soundManager.playCardSwipe();
+        triggerCutin(pendingSpell.template, '呪文詠唱！');
+        dispatch({
+          type: 'PLAY_CARD',
+          instanceId: pendingSpell.cardInstance.instanceId,
+          targetId: id,
+        });
+        showToast(`【${pendingSpell.template.name}】を発動しました！`, 'success');
+        setPendingSpell(null);
+        setSelectedCardId(null);
+        return;
+      } else {
+        showToast('そのカードは対象に選択できません', 'warn');
+        return;
+      }
+    }
+
     // Arcana Placement Phase
     if (state.phase === 'ARCANA_PLACEMENT') {
       const inHand = me.hand.find(c => c.instanceId === id);
@@ -874,31 +917,9 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
       if (inHand) {
         const tpl = getCard(inHand.cardId);
 
-        // Targeted spell initiation
-        if (tpl.type === 'Spell' && tpl.targetReq) {
-          if (tpl.id === 'BW-13') {
-            // Sacred prayer: archive spell/rune recovery
-            const validArchiveTargets = getValidSpellTargets(state, 'BW-13', inHand.instanceId);
-            setZoneModal({
-              isOpen: true,
-              title: '【聖者の祈り】回収するスペルまたはルーンを選択',
-              zoneType: 'archive',
-              cards: me.archive.filter(c => validArchiveTargets.includes(c.instanceId)),
-              isOpponent: false,
-              selectionMode: {
-                promptText: '手札に戻すカードを選んでください',
-                canSelect: (cTpl) => (cTpl.type === 'Spell' || cTpl.type === 'Rune') && cTpl.id !== 'BW-13',
-                onSelect: (chosenId) => {
-                  triggerCutin(tpl, '呪文詠唱！');
-                  dispatch({ type: 'PLAY_CARD', instanceId: inHand.instanceId, targetId: chosenId });
-                  setSelectedCardId(null);
-                },
-              },
-            });
-            return;
-          }
-          // Board-targeted spells (opponent unit target or domain/rune target)
-          setSelectedCardId(id === selectedCardId ? null : id);
+        // Spell card clicked in hand: initiate play or target selection
+        if (tpl.type === 'Spell') {
+          handlePlaySpell(inHand);
           return;
         }
 
@@ -1015,10 +1036,100 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
     setPreviewCard(null);
     setPreviewStats(undefined);
     setSelectedCardId(null);
+    setPendingSpell(null);
     setAttackDrag(null);
     setActiveAttackerId(null);
     setArcanaMode(false);
     dispatch({ type: 'START_GAME' });
+  };
+
+  const handlePlaySpell = (cardInst: CardInstance) => {
+    const tpl = getCard(cardInst.cardId);
+
+    // 【BW-13】聖者の祈り：アーカイブからこのカード以外のスペルかルーン1枚を回収
+    if (tpl.id === 'BW-13') {
+      const validArchiveCards = me.archive.filter(c => {
+        if (c.cardId === 'BW-13') return false;
+        const t = getCard(c.cardId);
+        return t.type === 'Spell' || t.type === 'Rune';
+      });
+      if (validArchiveCards.length === 0) {
+        soundManager.playCardSwipe();
+        triggerCutin(tpl, '呪文詠唱！');
+        dispatch({ type: 'PLAY_CARD', instanceId: cardInst.instanceId });
+        showToast('アーカイブに対象が存在しないため不発となりました', 'warn');
+        setSelectedCardId(null);
+        setPendingSpell(null);
+        return;
+      }
+      setZoneModal({
+        isOpen: true,
+        title: '【聖者の祈り】：回収するスペルまたはルーンを選択',
+        zoneType: 'archive',
+        cards: validArchiveCards,
+        isOpponent: false,
+        selectionMode: {
+          promptText: '手札に加えるカードを選択してください',
+          canSelect: (cTpl) => (cTpl.type === 'Spell' || cTpl.type === 'Rune') && cTpl.id !== 'BW-13',
+          onSelect: (chosenId) => {
+            soundManager.playCardSwipe();
+            triggerCutin(tpl, '呪文詠唱！');
+            dispatch({ type: 'PLAY_CARD', instanceId: cardInst.instanceId, targetId: chosenId });
+            showToast(`【${tpl.name}】を発動しました！`, 'success');
+            setSelectedCardId(null);
+            setPendingSpell(null);
+          },
+        },
+      });
+      return;
+    }
+
+    // 対象が必要なスペル判定（BR-12, BB-12, BW-12, BG-13, BD-13, BN-03, BN-04）
+    const targetSpellIds = ['BR-12', 'BB-12', 'BW-12', 'BG-13', 'BD-13', 'BN-03', 'BN-04'];
+    if (tpl.targetReq || targetSpellIds.includes(tpl.id)) {
+      const validTargetIds = getValidSpellTargets(state, tpl.id, cardInst.instanceId);
+
+      // 有効な対象が盤面に存在しない場合は不発として安全に解決（フリーズ防止）
+      if (validTargetIds.length === 0) {
+        soundManager.playCardSwipe();
+        triggerCutin(tpl, '呪文詠唱！');
+        dispatch({ type: 'PLAY_CARD', instanceId: cardInst.instanceId });
+        showToast(`対象が存在しないため【${tpl.name}】の効果は不発となりました`, 'warn');
+        setSelectedCardId(null);
+        setPendingSpell(null);
+        return;
+      }
+
+      // 対象選択モードへ移行
+      let targetTypes: ('unit' | 'domain' | 'rune' | 'archive')[] = ['unit'];
+      let targetDesc = '対象の相手ユニットを選択してください';
+      if (tpl.id === 'BN-03') {
+        targetTypes = ['domain'];
+        targetDesc = '破壊する相手のドメインを選択してください';
+      } else if (tpl.id === 'BN-04') {
+        targetTypes = ['rune'];
+        targetDesc = '手札に戻す相手のルーンを選択してください';
+      }
+
+      setPendingSpell({
+        cardInstance: cardInst,
+        template: tpl,
+        validTargets: validTargetIds,
+        targetTypes,
+        message: `【${tpl.name}】：${targetDesc}`,
+      });
+      setSelectedCardId(null);
+      showToast(`【${tpl.name}】の対象を選択してください`, 'info');
+      return;
+    }
+
+    // 対象不要のスペル（BR-13, BB-13, BG-12, BD-12 等）：即時発動
+    soundManager.playCardSwipe();
+    triggerCutin(tpl, '呪文詠唱！');
+    dispatch({ type: 'PLAY_CARD', instanceId: cardInst.instanceId });
+    showToast(`【${tpl.name}】を発動！`, 'success');
+    setSelectedCardId(null);
+    setPendingSpell(null);
   };
 
   const handlePlayHandCard = (instanceId: string) => {
@@ -1026,18 +1137,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
     if (cardInst) {
       const tpl = getCard(cardInst.cardId);
       if (tpl.type === 'Spell') {
-        if (tpl.id === 'BW-13') {
-          handleCardClick(instanceId, { stopPropagation: () => {} } as any);
-          return;
-        }
-        triggerCutin(tpl, '呪文詠唱！');
-        if (tpl.targetReq) {
-          dispatch({ type: 'START_SPELL_CAST', instanceId });
-          setSelectedCardId(instanceId);
-        } else {
-          dispatch({ type: 'PLAY_CARD', instanceId });
-          setSelectedCardId(null);
-        }
+        handlePlaySpell(cardInst);
         return;
       }
       if (tpl.type === 'Evolution') {
@@ -1271,6 +1371,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
           {/* Opponent Domain */}
           {(() => {
             const isDomainTarget = !!opp.domain && (
+              (pendingSpell && pendingSpell.targetTypes.includes('domain') && pendingSpell.validTargets.includes(opp.domain.instanceId)) ||
               (state.prompt?.type === 'TARGET_SELECTION' && state.prompt.validTargets.includes(opp.domain.instanceId)) ||
               (!!selectedCardId && me.hand.some(c => c.instanceId === selectedCardId && getCard(c.cardId).id === 'BN-03'))
             );
@@ -1290,7 +1391,12 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
                       if (isDomainTarget) {
                         e.stopPropagation();
                         soundManager.playCardSwipe();
-                        if (state.prompt?.type === 'TARGET_SELECTION') {
+                        if (pendingSpell) {
+                          triggerCutin(pendingSpell.template, '呪文詠唱！');
+                          dispatch({ type: 'PLAY_CARD', instanceId: pendingSpell.cardInstance.instanceId, targetId: opp.domain!.instanceId });
+                          setPendingSpell(null);
+                          showToast('相手のドメインを破壊しました！', 'success');
+                        } else if (state.prompt?.type === 'TARGET_SELECTION') {
                           dispatch({ type: 'RESOLVE_SPELL_TARGET', targetId: opp.domain!.instanceId });
                         } else if (selectedCardId) {
                           dispatch({ type: 'PLAY_CARD', instanceId: selectedCardId, targetId: opp.domain!.instanceId });
@@ -1322,6 +1428,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
               {[0, 1].map((rIdx) => {
                 const rune = opp.runes[rIdx];
                 const isRuneTarget = !!rune && (
+                  (pendingSpell && pendingSpell.targetTypes.includes('rune') && pendingSpell.validTargets.includes(rune.instanceId)) ||
                   (state.prompt?.type === 'TARGET_SELECTION' && state.prompt.validTargets.includes(rune.instanceId)) ||
                   (!!selectedCardId && me.hand.some(c => c.instanceId === selectedCardId && getCard(c.cardId).id === 'BN-04'))
                 );
@@ -1337,7 +1444,12 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
                       if (isRuneTarget) {
                         e.stopPropagation();
                         soundManager.playCardSwipe();
-                        if (state.prompt?.type === 'TARGET_SELECTION') {
+                        if (pendingSpell) {
+                          triggerCutin(pendingSpell.template, '呪文詠唱！');
+                          dispatch({ type: 'PLAY_CARD', instanceId: pendingSpell.cardInstance.instanceId, targetId: rune.instanceId });
+                          setPendingSpell(null);
+                          showToast('相手のルーンを手札に戻しました！', 'success');
+                        } else if (state.prompt?.type === 'TARGET_SELECTION') {
                           dispatch({ type: 'RESOLVE_SPELL_TARGET', targetId: rune.instanceId });
                         } else if (selectedCardId) {
                           dispatch({ type: 'PLAY_CARD', instanceId: selectedCardId, targetId: rune.instanceId });
@@ -1431,30 +1543,28 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
           id="center-arena"
           className="absolute inset-x-16 top-9 bottom-4 flex flex-col justify-between items-center px-2 z-10 pointer-events-auto"
         >
-          {/* Guide Banner for Targeted Spells, Prompt Target, or Combat Attack Target */}
+          {/* Guide Banner for Pending Spell Target Selection (v0.07 Fix) */}
+          {pendingSpell && (
+            <div className="absolute top-1 z-50 bg-indigo-950/95 border border-emerald-400 px-3.5 py-0.5 rounded-full shadow-2xl text-[9.5px] font-bold text-emerald-300 flex items-center space-x-2 animate-pulse">
+              <Zap size={11} className="text-yellow-300" />
+              <span>{pendingSpell.message}</span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPendingSpell(null);
+                  showToast('スペル詠唱をキャンセルしました', 'info');
+                }}
+                className="ml-2 px-2 py-0.2 bg-rose-700/90 hover:bg-rose-600 text-white text-[8.5px] rounded-full font-bold transition-colors cursor-pointer"
+              >
+                キャンセル
+              </button>
+            </div>
+          )}
           {state.prompt?.type === 'TARGET_SELECTION' && (
             <div className="absolute top-1 z-50 bg-indigo-950/95 border border-yellow-400 px-3.5 py-0.5 rounded-full shadow-xl text-[9px] font-bold text-yellow-300 flex items-center space-x-1 animate-pulse">
               <Zap size={10} className="text-yellow-300" />
               <span>{state.prompt.message || '対象を選択してください'}</span>
-            </div>
-          )}
-          {!state.prompt && selectedCardId && me.hand.some(c => c.instanceId === selectedCardId && getCard(c.cardId).type === 'Spell' && getCard(c.cardId).targetReq) && (() => {
-            const selCard = me.hand.find(c => c.instanceId === selectedCardId)!;
-            const tpl = getCard(selCard.cardId);
-            const msg = tpl.id === 'BN-03' ? '【ドメイン・ブレイク】破壊する相手のドメイン枠を選択してください'
-                      : tpl.id === 'BN-04' ? '【ルーン・ディスペル】手札に戻す相手のルーン枠を選択してください'
-                      : '対象のユニットを選択してください';
-            return (
-              <div className="absolute top-1 z-50 bg-indigo-950/95 border border-cyan-400 px-3 py-0.5 rounded-full shadow-xl text-[9px] font-bold text-cyan-200 flex items-center space-x-1 animate-pulse">
-                <Zap size={10} className="text-yellow-300" />
-                <span>{msg}</span>
-              </div>
-            );
-          })()}
-          {selectedCardId && me.field.some(u => u.instanceId === selectedCardId) && (
-            <div className="absolute top-1 z-50 bg-red-950/95 border border-yellow-400 px-3 py-0.5 rounded-full shadow-xl text-[9px] font-bold text-yellow-200 flex items-center space-x-1 animate-pulse">
-              <Sword size={10} className="text-yellow-300" />
-              <span>攻撃対象（相手のレストユニット または 上部結界シールド）を選択</span>
             </div>
           )}
 
@@ -1570,6 +1680,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
               const unit = me.field[slotIdx];
               const stats = unit ? calculateUnitStats(state, 'player1', unit) : null;
               const isSelected = unit && selectedCardId === unit.instanceId;
+              const isTarget = unit ? isTargetValidForSelected('unit', unit) : false;
               const isAttackerReady = unit && isMyTurn && state.phase === 'ACTION' && !unit.isRested && !unit.hasSummoningSickness;
               const isDraggingThisAttacker = unit && attackDrag?.attackerId === unit.instanceId;
               const isAttacking = unit && activeAttackerId === unit.instanceId;
@@ -1612,7 +1723,9 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
                   } ${
                     isDraggingThisAttacker
                       ? 'ring-4 ring-amber-400 scale-105 shadow-[0_0_25px_rgba(245,158,11,1)] z-40'
-                      : ''
+                      : isTarget
+                        ? 'ring-2 ring-emerald-400 shadow-lg shadow-emerald-400/60 animate-pulse z-30'
+                        : ''
                   } ${isAttacking ? 'animate-attack-dash z-40' : ''}`}
                 >
                   {hasRipple && (

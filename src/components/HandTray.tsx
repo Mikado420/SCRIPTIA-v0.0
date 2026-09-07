@@ -25,6 +25,7 @@ export const HandTray: React.FC<Props> = ({
   hand,
   state,
   onInspect,
+  onPlayCard,
   onCardDragStart,
   onCardDragMove,
   onCardDragEnd,
@@ -36,6 +37,7 @@ export const HandTray: React.FC<Props> = ({
   // Pointer drag and 700ms long-press tracking refs
   const touchStartPosRef = useRef<{ x: number; y: number; id: string } | null>(null);
   const isDraggingRef = useRef<boolean>(false);
+  const hasLongPressedRef = useRef<boolean>(false);
   const longPressTimerRef = useRef<NodeJS.Timeout | number | null>(null);
 
   const clearLongPressTimer = () => {
@@ -58,6 +60,7 @@ export const HandTray: React.FC<Props> = ({
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     e.stopPropagation();
     clearLongPressTimer();
+    hasLongPressedRef.current = false;
 
     touchStartPosRef.current = {
       x: e.clientX,
@@ -69,6 +72,7 @@ export const HandTray: React.FC<Props> = ({
     // Start 700ms long-press timer for card inspection HUD
     longPressTimerRef.current = setTimeout(() => {
       if (!isDraggingRef.current) {
+        hasLongPressedRef.current = true;
         soundManager.playDetailOpen();
         onInspect(getCard(c.cardId));
       }
@@ -117,7 +121,9 @@ export const HandTray: React.FC<Props> = ({
     }
 
     const wasDragging = isDraggingRef.current;
+    const hadLongPressed = hasLongPressedRef.current;
     touchStartPosRef.current = null;
+    hasLongPressedRef.current = false;
     setTimeout(() => {
       isDraggingRef.current = false;
     }, 50);
@@ -126,8 +132,12 @@ export const HandTray: React.FC<Props> = ({
       if (onCardDragEnd) {
         onCardDragEnd(c, e.clientX, e.clientY);
       }
+    } else if (!hadLongPressed) {
+      // Quick tap on hand card (<700ms, <8px): play card / trigger spell targeting
+      if (onPlayCard) {
+        onPlayCard(c.instanceId);
+      }
     }
-    // No onClick or tap selection action on hand cards. Operations are drag-only!
   };
 
   const handlePointerCancel = (c: CardInstance, e: React.PointerEvent) => {

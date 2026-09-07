@@ -359,14 +359,46 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
       const canBeGuarded = !aTpl.keywords?.includes('CannotBeGuarded');
 
       if (guarders.length > 0 && canBeGuarded) {
+        // If defending player is AI (player2), automatically evaluate and resolve guard without showing dialog to human
+        if (oppKey === 'player2') {
+          const stats = calculateUnitStats(newState, p.id, attacker);
+          const attackerAtk = stats.atk;
+          const attackerBrk = stats.brk;
+
+          let chosenGuarder: UnitState | undefined;
+          if (opp.barrier <= 1 || attackerBrk >= opp.barrier) {
+            chosenGuarder = guarders[0];
+          } else {
+            const winningGuarder = guarders.find(g => calculateUnitStats(newState, 'player2', g).def >= attackerAtk);
+            if (winningGuarder) {
+              chosenGuarder = winningGuarder;
+            } else {
+              const cheapGuarder = guarders.find(g => getCard(g.cards[0].cardId).cost <= 2);
+              if (cheapGuarder && attackerAtk >= 40) {
+                chosenGuarder = cheapGuarder;
+              }
+            }
+          }
+
+          if (chosenGuarder) {
+            chosenGuarder.isRested = true;
+            newState.log.push(`相手の【${getCard(chosenGuarder.cards[0].cardId).name}】が守護を発動し迎撃！（レスト状態）`);
+            return resolveCombat(newState, action.attackerId, chosenGuarder.instanceId);
+          } else {
+            newState.log.push(`相手は守護を行わなかった。直接攻撃成功！`);
+            return checkWinCondition(newState, oppKey, stats.brk, action.attackerId);
+          }
+        }
+
+        // Defending player is human (player1): show prompt only to human player
         newState.prompt = {
           type: 'GUARD',
-          playerId: oppKey,
+          playerId: 'player1',
           attackerId: action.attackerId,
           validTargets: guarders.map(u => u.instanceId),
-          text: `${p.id} が直接攻撃を宣言！守護を発動しますか？`,
+          text: `相手が直接攻撃を宣言！守護を発動しますか？`,
         };
-        newState.log.push(`${p.id} は直接攻撃を宣言！守護の選択を待機中...`);
+        newState.log.push(`相手が直接攻撃を宣言！守護の選択を待機中...`);
         return newState;
       }
 
