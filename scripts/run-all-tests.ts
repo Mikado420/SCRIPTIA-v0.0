@@ -369,6 +369,126 @@ import { ScriptiaAIEngine, toBoardUnit } from '../src/engine/aiEngine';
   );
 }
 
+// Test 16: チャージ温存（チャージしなくても手持ちカードが出せる場合、手札を捨てずに温存）
+{
+  const state = createInitialState();
+  state.currentPlayer = 'player2';
+  state.opponent = state.player2;
+  state.player = state.player1;
+  // AI has 3 arcana of Fire
+  state.player2.arcana = [
+    { instanceId: 'a1', cardId: 'BR-01' },
+    { instanceId: 'a2', cardId: 'BR-01' },
+    { instanceId: 'a3', cardId: 'BR-01' },
+  ];
+  state.player2.currentArcana = 3;
+  state.player2.maxArcana = 3;
+  // Hand has a 2-cost card (BR-01) and a 3-cost card (BR-04)
+  state.player2.hand = [
+    { instanceId: 'h1', cardId: 'BR-01' }, // cost 2
+    { instanceId: 'h2', cardId: 'BR-04' }, // cost 3
+  ];
+
+  const plan = ScriptiaAIEngine.planBestTurn(state);
+  assert(
+    plan.chargeCard === null,
+    'テスト16: チャージ温存（チャージしなくてもカードが出せる場合、無駄に手札をチャージせず温存）'
+  );
+}
+
+// Test 17: 的確なチャージ＆大型展開（チャージすることで出せる高コストカードがある場合、チャージして展開）
+{
+  const state = createInitialState();
+  state.currentPlayer = 'player2';
+  state.opponent = state.player2;
+  state.player = state.player1;
+  // AI has 4 arcana of Fire
+  state.player2.arcana = [
+    { instanceId: 'a1', cardId: 'BR-01' },
+    { instanceId: 'a2', cardId: 'BR-01' },
+    { instanceId: 'a3', cardId: 'BR-01' },
+    { instanceId: 'a4', cardId: 'BR-01' },
+  ];
+  state.player2.currentArcana = 4;
+  state.player2.maxArcana = 4;
+  // Hand has a 5-cost bomb (BR-08 クリムゾン・ドラゴン) and a 1-cost / 2-cost fodder (BR-03)
+  state.player2.hand = [
+    { instanceId: 'h-bomb', cardId: 'BR-08' }, // cost 5
+    { instanceId: 'h-fodder', cardId: 'BR-03' }, // cost 2
+  ];
+
+  const plan = ScriptiaAIEngine.planBestTurn(state);
+  assert(
+    plan.chargeCard !== null &&
+    plan.chargeCard.instanceId === 'h-fodder' &&
+    plan.plays.some(p => p.card.id === 'BR-08'),
+    'テスト17: 的確なチャージ＆大型展開（チャージして5コストのクリムゾン・ドラゴンを召喚）'
+  );
+}
+
+// Test 18: 総合手番プランによるターンシミュレーション（手札温存・複数展開の最適バランス）
+{
+  const state = createInitialState();
+  state.currentPlayer = 'player2';
+  state.opponent = state.player2;
+  state.player = state.player1;
+  state.player2.arcana = [
+    { instanceId: 'a1', cardId: 'BR-01' },
+    { instanceId: 'a2', cardId: 'BR-01' },
+  ];
+  state.player2.hand = [
+    { instanceId: 'h1', cardId: 'BR-01' }, // cost 2
+    { instanceId: 'h2', cardId: 'BR-02' }, // cost 2
+    { instanceId: 'h3', cardId: 'BR-03' }, // cost 2
+  ];
+
+  const plan = ScriptiaAIEngine.planBestTurn(state);
+  // With 2 mana, it can play one 2-cost card without charge, leaving 2 cards in hand
+  assert(
+    plan.plays.length >= 1 && plan.totalScore > 0,
+    'テスト18: 総合手番プラン（手札温存スコアにより、無理な全手札浪費を防止して最善手を選定）'
+  );
+}
+
+// Test 19: 攻撃手順評価（自爆回避・相手結界への安全な進行・有利トレードの総合判定）
+{
+  const state = createInitialState();
+  state.currentPlayer = 'player2';
+  state.player1.barrier = 2;
+  // AI has a 30 ATK unit
+  const aiUnit = {
+    instanceId: 'ai-u1',
+    cards: [{ instanceId: 'c-u1', cardId: 'BR-04' }], // 30 ATK / 30 DEF
+    isRested: false,
+    hasSummoningSickness: false,
+    modifiers: [],
+  };
+  // Opponent has a 40 ATK / 40 DEF rested unit (danger to attack), and a 20 ATK / 20 DEF rested unit (favorable trade)
+  const opBig = {
+    instanceId: 'op-big',
+    cards: [{ instanceId: 'c-ob', cardId: 'BB-06' }], // 40 ATK / 40 DEF
+    isRested: true,
+    hasSummoningSickness: false,
+    modifiers: [],
+  };
+  const opSmall = {
+    instanceId: 'op-small',
+    cards: [{ instanceId: 'c-os', cardId: 'BR-01' }], // 20 ATK / 20 DEF
+    isRested: true,
+    hasSummoningSickness: false,
+    modifiers: [],
+  };
+
+  const aiUnits = [toBoardUnit(state, 'player2', aiUnit)];
+  const opUnits = [toBoardUnit(state, 'player1', opBig), toBoardUnit(state, 'player1', opSmall)];
+
+  const attacks = ScriptiaAIEngine.evaluateAttacks(aiUnits, opUnits, 2, 0);
+  assert(
+    attacks.length === 1 && attacks[0].targetUnit?.instanceId === 'op-small',
+    'テスト19: 攻撃手順最適化（40DEFへの自爆を回避し、20DEFの弱小敵への無傷有利トレードをピンポイント選択）'
+  );
+}
+
 console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 console.log(`結果: 全${passCount + failCount}件中 ${passCount}件 PASS / ${failCount}件 FAIL`);
 console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);

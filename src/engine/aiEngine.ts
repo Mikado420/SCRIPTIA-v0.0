@@ -1,22 +1,13 @@
-import React, { useEffect, useRef } from 'react';
 import { GameState, Card, BoardUnit, PlayerState, GameAction, UnitState, CardInstance } from '../types';
 import { getCard } from '../data/cards';
 import { calculateUnitStats } from './engineUtils';
 import { canUnitGuard } from './combatEngine';
 
-/**
- * Helper to wrap raw UnitState into BoardUnit with live calculated stats & card data
- */
-export function toBoardUnit(state: GameState, playerId: 'player1' | 'player2', unit: UnitState): BoardUnit {
-  const card = getCard(unit.cards[0].cardId);
-  const stats = calculateUnitStats(state, playerId, unit);
-  return {
-    ...unit,
-    card,
-    currentAtk: stats.atk,
-    currentDef: stats.def,
-    currentBrk: stats.brk,
-  };
+export interface CardPlayAction {
+  card: Card;
+  targetUnitId?: string;
+  targetDomain?: boolean;
+  targetRuneIndex?: number;
 }
 
 export interface AttackAction {
@@ -24,409 +15,433 @@ export interface AttackAction {
   targetType: 'PLAYER' | 'UNIT';
   targetUnit?: BoardUnit;
   score: number;
+  reason?: string;
+}
+
+export interface TurnPlan {
+  chargeCard: Card | null;
+  plays: CardPlayAction[];
+  attacks: AttackAction[];
+  totalScore: number;
   reason: string;
 }
 
 /**
- * SCRIPTIA Ver 0.07 高精度盤面・アクション評価AIエンジン
+ * カードインスタンスから完全な属性・制限値・能力を持つCardを生成
  */
+export function toFullCard(ci: CardInstance | Card): Card {
+  if ('system' in ci && 'type' in ci && 'cost' in ci && (ci as any).id) {
+    const el = (ci as any).element || (ci as any).system;
+    const cType = (ci as any).cardType || (ci as any).type;
+    return {
+      ...ci,
+      element: el,
+      cardType: cType,
+      restrictions: (ci as any).restrictions || {
+        cannotAttackPlayer: (ci as any).keywords?.includes('CannotAttackPlayer') || (ci as any).keywords?.includes('相手プレイヤーを攻撃できない'),
+        cannotBeGuarded: (ci as any).keywords?.includes('CannotBeGuarded'),
+        canAttackActive: (ci as any).keywords?.includes('CanAttackActive'),
+      },
+    } as Card;
+  }
+  const template = getCard((ci as CardInstance).cardId);
+  const el = template.element || template.system;
+  const cType = template.cardType || template.type;
+  return {
+    ...template,
+    ...ci,
+    id: template.id,
+    name: template.name,
+    cost: template.cost,
+    system: template.system,
+    type: template.type,
+    lineage: template.lineage,
+    atk: template.atk,
+    def: template.def,
+    brk: template.brk,
+    keywords: template.keywords,
+    effectText: template.effectText,
+    element: el,
+    cardType: cType,
+    restrictions: template.restrictions || {
+      cannotAttackPlayer: template.keywords?.includes('CannotAttackPlayer') || template.keywords?.includes('相手プレイヤーを攻撃できない' as any),
+      cannotBeGuarded: template.keywords?.includes('CannotBeGuarded'),
+      canAttackActive: template.keywords?.includes('CanAttackActive'),
+    },
+  };
+}
+
+/**
+ * Raw UnitState をリアルタイムステータス付き BoardUnit に変換
+ */
+export function toBoardUnit(state: GameState, playerId: 'player1' | 'player2', unit: UnitState): BoardUnit {
+  const card = getCard(unit.cards[0].cardId);
+  const stats = calculateUnitStats(state, playerId, unit);
+  const el = card.element || card.system;
+  const cType = card.cardType || card.type;
+  const fullCard: Card = {
+    ...card,
+    element: el,
+    cardType: cType,
+    restrictions: card.restrictions || {
+      cannotAttackPlayer: card.keywords?.includes('CannotAttackPlayer') || card.keywords?.includes('相手プレイヤーを攻撃できない' as any),
+      cannotBeGuarded: card.keywords?.includes('CannotBeGuarded'),
+      canAttackActive: card.keywords?.includes('CanAttackActive'),
+    },
+  };
+
+  return {
+    ...unit,
+    card: fullCard,
+    currentAtk: stats.atk,
+    currentDef: stats.def,
+    currentBrk: stats.brk,
+  };
+}
+
+// ======================================================================
+// 【思考型AIエンジン完全版：ScriptiaAIEngine】
+// ======================================================================
+
 export class ScriptiaAIEngine {
 
-  // ==========================================
-  // 1. 盤面およびカードの静的・動的評価関数
-  // ==========================================
+  // ----------------------------------------------------
+  // 1. ユニット・盤面の評価スコアリング
+  // ----------------------------------------------------
 
-  /** 結界枚数に応じた非線形価値スコア（0に近づくほど価値増大） */
   private static getBarrierScore(barrier: number): number {
-    const scores = [0, 100, 165, 210, 245, 275]; // 結界0〜5
+    const scores = [0, 100, 165, 210, 245, 275];
     return scores[Math.max(0, Math.min(5, barrier))] || 0;
   }
 
-  /** ユニットの戦力評価スコア */
-  public static evaluateUnit(unit: BoardUnit | UnitState, isOwner: boolean, playerBarrier: number): number {
-    const bUnit = (unit as BoardUnit).card ? (unit as BoardUnit) : ({
-      ...unit,
-      card: getCard(unit.cards[0].cardId),
-    } as BoardUnit);
+  public static evaluateUnit(unit: BoardUnit, isOwner: boolean, barrier: number): number {
+    const atk = unit.currentAtk ?? unit.card.atk ?? 0;
+    const def = unit.currentDef ?? unit.card.def ?? 0;
+    const brk = unit.currentBrk ?? unit.card.brk ?? 1;
 
-    const atk = bUnit.currentAtk ?? bUnit.card.atk ?? 0;
-    const def = bUnit.currentDef ?? bUnit.card.def ?? 0;
-    const brk = bUnit.currentBrk ?? bUnit.card.brk ?? 1;
+    let val = (atk * 0.6) + (def * 0.7) + (brk * 25);
+    if (unit.isRested) val *= 0.6;
+    const kw = (unit.card.keywords || []) as string[];
+    const hasRush = kw.includes('速攻') || kw.includes('Rush');
+    if (unit.hasSummoningSickness && !hasRush) val *= 0.85;
 
-    // 自爆ルールの特性上、耐久(DEF)を高く評価
-    let value = (atk * 0.6) + (def * 0.7) + (brk * 25);
+    if (kw.includes('守護') || kw.includes('Guard')) val += (25 + Math.max(0, 4 - barrier) * 12);
+    if (kw.includes('必殺') || kw.includes('Lethal')) val += 40;
+    if (hasRush) val += 20;
+    if (unit.card.cardType === 'EVOLUTION' || unit.card.type === 'Evolution') val += 30;
 
-    // 状態による補正
-    if (bUnit.isRested) {
-      // レスト状態は相手から一方的に殴られるため価値が約40%低下
-      value *= 0.6;
-    }
-
-    const keywords = bUnit.card.keywords || [];
-    const hasRush = keywords.includes('速攻' as any) || keywords.includes('Rush');
-
-    if (bUnit.hasSummoningSickness && !hasRush) {
-      value *= 0.85;
-    }
-
-    // キーワード能力補正
-    const hasGuard = keywords.includes('守護' as any) || keywords.includes('Guard');
-    if (hasGuard) {
-      // 結界がピンチの時ほど守護の価値が跳ね上がる
-      const defenseUrgency = Math.max(0, 4 - playerBarrier) * 12;
-      value += (25 + defenseUrgency);
-    }
-    if (keywords.includes('必殺' as any) || keywords.includes('Lethal')) {
-      value += 40; // どんな大型とも相打ちできる抑止力
-    }
-    if (hasRush) {
-      value += 20;
-    }
-    if (bUnit.card.cardType === 'EVOLUTION' || bUnit.card.type === 'Evolution') {
-      value += 30; // 進化ユニットのカードスタック価値
-    }
-
-    return value;
+    return val;
   }
 
-  /** 全体盤面評価値（AI視点：プラスならAI有利、マイナスならプレイヤー有利） */
-  public static evaluateBoardState(state: GameState): number {
-    const ai = (state as any).opponent || state.player2;
-    const player = (state as any).player || state.player1;
-
-    // 1. リーサル絶対判定
-    const aiBoardUnits = ai.field.map((u: UnitState) => toBoardUnit(state, 'player2', u));
-    const playerBoardUnits = player.field.map((u: UnitState) => toBoardUnit(state, 'player1', u));
-
-    if (
-      player.barrier === 0 &&
-      aiBoardUnits.some((u: BoardUnit) =>
-        !u.isRested &&
-        !u.hasSummoningSickness &&
-        !u.card.restrictions?.cannotAttackPlayer &&
-        !u.card.keywords?.includes('CannotAttackPlayer')
-      )
-    ) {
-      return 999999; // AIの確定勝利
-    }
-    if (
-      ai.barrier === 0 &&
-      playerBoardUnits.some((u: BoardUnit) => !u.isRested && !u.hasSummoningSickness)
-    ) {
-      return -999999; // AIの敗北危機
-    }
-
-    // 2. 結界スコア
-    let score = this.getBarrierScore(ai.barrier) - this.getBarrierScore(player.barrier);
-
-    // 3. 盤面戦力スコア
-    const aiBoardScore = aiBoardUnits.reduce(
-      (sum: number, u: BoardUnit) => sum + this.evaluateUnit(u, true, ai.barrier),
-      0
-    );
-    const playerBoardScore = playerBoardUnits.reduce(
-      (sum: number, u: BoardUnit) => sum + this.evaluateUnit(u, false, player.barrier),
-      0
-    );
-    score += (aiBoardScore - playerBoardScore);
-
-    // 4. 手札・リソーススコア（1枚 = 約25点）
-    score += (ai.hand.length - player.hand.length) * 25;
-
-    // 5. ルーン・ドメインの配置アドバンテージ
-    score += (ai.runes.length * 30) - (player.runes.length * 35); // 相手の伏せルーンは警戒
-    if (ai.domain) score += 40;
-    if (player.domain) score -= 40;
-
-    return score;
+  // 系統条件チェック
+  public static checkAffinity(card: Card, arcana: Card[]): boolean {
+    const el = card.element || card.system;
+    if (!el || el === '無' || el === 'Neutral') return true;
+    const norm = (e: string) => {
+      if (e === '火' || e === 'Fire') return 'Fire';
+      if (e === '水' || e === 'Water') return 'Water';
+      if (e === '地' || e === 'Earth') return 'Earth';
+      if (e === '光' || e === 'Light') return 'Light';
+      if (e === '闇' || e === 'Dark') return 'Dark';
+      return 'Neutral';
+    };
+    const target = norm(el);
+    return arcana.some(a => norm((a.element || a.system) || '') === target);
   }
 
-  // ==========================================
-  // 2. マナチャージ判定ルーチン
-  // ==========================================
+  // ----------------------------------------------------
+  // 2. 攻撃手順の最適化評価
+  // ----------------------------------------------------
 
-  /** 手札の中からチャージに最適な1枚を選定（不要ならnull） */
-  public static selectManaChargeCard(ai: PlayerState): (Card & { instanceId: string }) | null {
-    if (ai.hand.length === 0) return null;
-
-    // アルカナに存在する系統を収集
-    const currentElements = new Set(
-      ai.arcana.map(c => {
-        const tpl = getCard(c.cardId);
-        return (c as any).element || tpl.element || tpl.system || '無';
-      })
+  public static evaluateAttacks(
+    field: BoardUnit[],
+    opponentField: BoardUnit[],
+    opponentBarrier: number,
+    opponentRunesCount: number
+  ): AttackAction[] {
+    const plannedAttacks: AttackAction[] = [];
+    const available = field.filter(
+      u => !u.isRested && (!u.hasSummoningSickness || u.card.keywords?.includes('速攻' as any) || u.card.keywords?.includes('Rush' as any))
     );
+    const remainingEnemies = [...opponentField];
 
-    let bestCard: (Card & { instanceId: string }) | null = null;
-    let highestChargeScore = -9999;
-
-    for (const rawCard of ai.hand) {
-      const tpl = getCard(rawCard.cardId);
-      const card: Card & { instanceId: string } = {
-        ...tpl,
-        instanceId: rawCard.instanceId,
-        element: tpl.element || tpl.system,
-      };
-
-      let chargeScore = 0;
-
-      // ① 系統条件の解放ボーナス（最重要）
-      const el = card.element || card.system || '無';
-      if (el && el !== '無' && el !== 'Neutral' && !currentElements.has(el)) {
-        chargeScore += 80;
-      }
-
-      // ② コストカーブ判定（現在マナより重すぎるカードはチャージ候補）
-      const currentManaCapacity = ai.arcana.length;
-      if (card.cost > currentManaCapacity + 2) {
-        chargeScore += 40; // 2ターン先まで出せない重いカード
-      } else if (card.cost === currentManaCapacity + 1) {
-        chargeScore -= 30; // 次のターン綺麗に出せる本命カードはキープ
-      }
-
-      // ③ 手札の重複判定（同じカードが2枚以上あれば1枚チャージ）
-      const duplicates = ai.hand.filter(c => c.cardId === card.id).length;
-      if (duplicates > 1) {
-        chargeScore += 35;
-      }
-
-      // ④ 守護カードの温存（結界ピンチ時は守護を手札に残す）
-      const hasGuard = card.keywords?.includes('守護' as any) || card.keywords?.includes('Guard');
-      if (hasGuard && ai.barrier <= 3) {
-        chargeScore -= 50;
-      }
-
-      if (chargeScore > highestChargeScore) {
-        highestChargeScore = chargeScore;
-        bestCard = card;
-      }
-    }
-
-    return bestCard;
-  }
-
-  // ==========================================
-  // 3. 攻撃判定ルーチン（自爆根絶・有利トレード）
-  // ==========================================
-
-  /** 最適な攻撃手を決定する（打つ手がない・自爆手しかない場合はnull） */
-  public static selectBestAttack(state: GameState): AttackAction | null {
-    const ai = (state as any).opponent || state.player2;
-    const player = (state as any).player || state.player1;
-
-    // 攻撃可能な自軍ユニットを抽出
-    const attackers = ai.field
-      .map((u: UnitState) => toBoardUnit(state, 'player2', u))
-      .filter((u: BoardUnit) =>
-        !u.isRested &&
-        (!u.hasSummoningSickness || u.card.keywords?.includes('速攻' as any) || u.card.keywords?.includes('Rush'))
-      );
-
-    if (attackers.length === 0) return null;
-
-    const candidates: AttackAction[] = [];
-
-    for (const attacker of attackers) {
+    for (const attacker of available) {
       const atk = attacker.currentAtk ?? attacker.card.atk ?? 0;
       const brk = attacker.currentBrk ?? attacker.card.brk ?? 1;
-      const isCannotAttackPlayer = attacker.card.restrictions?.cannotAttackPlayer || attacker.card.keywords?.includes('CannotAttackPlayer');
+      let bestAttack: AttackAction | null = null;
+      let maxScore = -99999;
 
-      // ----------------------------------------
-      // A. 相手プレイヤー（結界）への直接攻撃の評価
-      // ----------------------------------------
-      if (!isCannotAttackPlayer) {
-        let directScore = 0;
+      const cannotAtkPlayer =
+        attacker.card.restrictions?.cannotAttackPlayer ||
+        attacker.card.keywords?.includes('CannotAttackPlayer' as any) ||
+        attacker.card.keywords?.includes('相手プレイヤーを攻撃できない' as any);
 
-        // ① リーサル（結界0で即死）判定
-        if (player.barrier === 0) {
-          // 相手にアクティブな守護がいなければ即座に勝利
-          const hasActiveGuardian = player.field.some((u: UnitState) => {
-            const b = toBoardUnit(state, 'player1', u);
-            return !b.isRested && (b.card.keywords?.includes('守護' as any) || b.card.keywords?.includes('Guard'));
-          });
-          if (!hasActiveGuardian) {
-            return {
-              attacker,
-              targetType: 'PLAYER',
-              score: 999999,
-              reason: 'リーサル直接攻撃（勝利確定）'
-            };
-          }
+      // ① 相手プレイヤー攻撃
+      if (!cannotAtkPlayer) {
+        let pScore = (brk * 45);
+        if (opponentBarrier <= 2) pScore += 40;
+
+        if (opponentRunesCount > 0) {
+          if (atk <= 20) pScore += 30; // 囮攻撃ボーナス
+          else pScore -= 20; // 罠被弾リスク
+        }
+        pScore -= (attacker.currentDef ?? attacker.card.def ?? 20) * 0.2;
+
+        if (opponentBarrier === 0) {
+          pScore = 999999; // リーサル
         }
 
-        // ② 通常の結界ブレイク価値
-        directScore += (brk * 45);
-
-        // 相手の残結界が少ないほどフェイス攻撃の優先度UP
-        if (player.barrier <= 2) directScore += 35;
-
-        // ③ ルーン警戒補正（囮攻撃ルーチン）
-        if (player.runes.length > 0) {
-          // 相手がルーンを伏せている時は、小型（低ATK）から順に攻撃させて罠を踏ませる
-          if (atk <= 20) {
-            directScore += 30; // 小型による安全な囮ブレイク
-          } else {
-            directScore -= 20; // 大型で最初に罠を踏むリスクを低減
-          }
+        if (pScore > maxScore) {
+          maxScore = pScore;
+          bestAttack = { attacker, targetType: 'PLAYER', score: pScore, reason: '相手プレイヤー/結界へ攻撃' };
         }
-
-        // 攻撃後レストになるリスク減点
-        directScore -= (attacker.currentDef ?? attacker.card.def ?? 20) * 0.2;
-
-        candidates.push({
-          attacker,
-          targetType: 'PLAYER',
-          score: directScore,
-          reason: '相手プレイヤー/結界へ攻撃'
-        });
       }
 
-      // ----------------------------------------
-      // B. 相手ユニットへの攻撃（有利トレード）
-      // ----------------------------------------
-      const canAttackActive = attacker.card.id === 'BR-09' || 
-        attacker.card.keywords?.includes('CanAttackActive') || 
-        attacker.card.effectText?.includes('アクティブ状態の相手ユニットを攻撃できる');
-      
-      const validTargets = player.field
-        .map((target: UnitState) => toBoardUnit(state, 'player1', target))
-        .filter((target: BoardUnit) => {
-          if (canAttackActive) return true;
-          return target.isRested; // 原則はレスト状態のみ
-        });
+      // ② 相手レストユニットへの有利トレード
+      const targets = remainingEnemies.filter(e => e.isRested);
+      for (const target of targets) {
+        const tDef = target.currentDef ?? target.card.def ?? 0;
+        const isLethal = attacker.card.keywords?.includes('必殺' as any) || attacker.card.keywords?.includes('Lethal' as any);
+        if (atk < tDef && !isLethal) continue; // 自爆回避
 
-      for (const target of validTargets) {
-        const targetDef = target.currentDef ?? target.card.def ?? 0;
-        const targetAtk = target.currentAtk ?? target.card.atk ?? 0;
-        const targetValue = this.evaluateUnit(target, false, player.barrier);
+        let uScore = 0;
+        const targetVal = this.evaluateUnit(target, false, opponentBarrier);
 
-        // 【最優先自爆チェック】攻撃側ATK < 防御側DEF は絶対除外
-        if (atk < targetDef) {
-          const hasLethal = attacker.card.keywords?.includes('必殺' as any) || attacker.card.keywords?.includes('Lethal');
-          if (!hasLethal) {
-            continue; // 自爆は評価せず除外
-          }
+        if (atk > tDef || isLethal) {
+          uScore = 75 + targetVal;
+        } else {
+          const myVal = this.evaluateUnit(attacker, true, 5);
+          if (targetVal >= myVal) uScore = 30 + (targetVal - myVal);
+          else continue;
         }
 
-        let tradeScore = 0;
-
-        if (atk > targetDef) {
-          // 【一方的勝利（有利トレード）】無傷で相手を破壊
-          tradeScore = 70 + targetValue;
-          // 相手の脅威ユニットや高コストを倒すほど高得点
-          if (target.card.cost >= 4) tradeScore += 30;
-          if (target.card.keywords?.includes('守護' as any) || target.card.keywords?.includes('Guard')) {
-            tradeScore += 25; // 邪魔なブロッカー排除
-          }
-        } else if (atk === targetDef || attacker.card.keywords?.includes('必殺' as any) || attacker.card.keywords?.includes('Lethal')) {
-          // 【相打ち（1:1交換）】
-          const myValue = this.evaluateUnit(attacker, true, ai.barrier);
-          // 「相手の価値 > 自分の価値」の場合のみ相打ちを許可
-          if (targetValue >= myValue) {
-            tradeScore = 30 + (targetValue - myValue);
-          } else {
-            tradeScore = -50; // 自軍の大型で相手の小型と相打ちするのは損
-          }
+        if (uScore > maxScore) {
+          maxScore = uScore;
+          bestAttack = {
+            attacker,
+            targetType: 'UNIT',
+            targetUnit: target,
+            score: uScore,
+            reason: `相手の【${target.card.name}】へ有利トレード`,
+          };
         }
+      }
 
-        candidates.push({
-          attacker,
-          targetType: 'UNIT',
-          targetUnit: target,
-          score: tradeScore,
-          reason: `敵ユニット[${target.card.name}]への有利トレード`
-        });
+      if (bestAttack && bestAttack.score > 0) {
+        plannedAttacks.push(bestAttack);
+        if (bestAttack.targetType === 'UNIT' && bestAttack.targetUnit) {
+          const idx = remainingEnemies.findIndex(e => e.instanceId === bestAttack!.targetUnit!.instanceId);
+          if (idx !== -1) remainingEnemies.splice(idx, 1);
+        }
       }
     }
 
-    if (candidates.length === 0) return null;
-
-    // スコア最高の攻撃手を採択
-    candidates.sort((a, b) => b.score - a.score);
-    return candidates[0].score > 0 ? candidates[0] : null;
+    return plannedAttacks;
   }
 
-  // ==========================================
-  // 4. 守護（迎撃）判断ルーチン
-  // ==========================================
+  // ----------------------------------------------------
+  // 3. 総合手番プラン（Turn Plan）の全探索
+  // ----------------------------------------------------
 
-  /** プレイヤーの直接攻撃に対して、AIが守護を行うべきかを判定 */
-  public static shouldGuard(
-    state: GameState, 
-    attacker: BoardUnit, 
-    availableGuardians: BoardUnit[]
-  ): BoardUnit | null {
-    if (availableGuardians.length === 0) return null;
+  /**
+   * マナチャージ有無、プレイカードの組み合わせ、攻撃結果をすべて考慮して最高評価プランを算出
+   */
+  public static planBestTurn(state: GameState): TurnPlan {
+    const ai = state.opponent || state.player2;
+    const player = state.player || state.player1;
 
-    const ai = (state as any).opponent || state.player2;
-    const attackerAtk = attacker.currentAtk ?? attacker.card.atk ?? 0;
-    const attackerBrk = attacker.currentBrk ?? attacker.card.brk ?? 1;
+    const aiHand = ai.hand.map(toFullCard);
+    const aiArcana = ai.arcana.map(toFullCard);
+    const aiField = ai.field.map(u => toBoardUnit(state, 'player2', u));
+    const playerField = player.field.map(u => toBoardUnit(state, 'player1', u));
 
-    for (const guardian of availableGuardians) {
-      const def = guardian.currentDef ?? guardian.card.def ?? 0;
-
-      // ① 相手が自爆する理想的な迎撃 (guardian.DEF > attacker.ATK)
-      if (def > attackerAtk) {
-        return guardian; // 無傷で相手を自滅させられるので100%守護
+    const chargeOptions: (Card | null)[] = [null]; // チャージしない選択肢
+    // 手札が2枚以上あれば、各カードをチャージする選択肢を追加
+    if (aiHand.length >= 2 && aiArcana.length < 9) {
+      for (const card of aiHand) {
+        chargeOptions.push(card);
       }
+    }
 
-      // ② 自軍結界が0、またはこの攻撃で即死する場合 (リーサル防衛)
-      if (ai.barrier <= 0 || ai.barrier <= attackerBrk) {
-        return guardian; // 敗北を避けるために身代わり
-      }
+    let bestPlan: TurnPlan = {
+      chargeCard: null,
+      plays: [],
+      attacks: [],
+      totalScore: -999999,
+      reason: '初期状態',
+    };
 
-      // ③ 【BD-02】マリー等の自壊・低コスト守護の使い所
-      if (guardian.card.id === 'BD-02' && attackerBrk >= 2) {
-        return guardian; // 2ブレイク以上を防げるなら身代わり価値あり
-      }
+    for (const chargeCard of chargeOptions) {
+      // 仮想アルカナ＆仮想手札の構築
+      const virtualArcana = chargeCard ? [...aiArcana, chargeCard] : [...aiArcana];
+      const virtualHand = chargeCard ? aiHand.filter(c => c.instanceId !== chargeCard.instanceId) : [...aiHand];
+      const virtualMana = virtualArcana.length;
 
-      // ④ 相打ちトレード
-      if (def === attackerAtk) {
-        if (attacker.card.cost >= guardian.card.cost) {
-          return guardian; // 同等以上のコスト交換なら守護成立
+      // 手札からコストと系統を満たすプレイ組み合わせを探索（深さ優先）
+      const playableCombos = this.findPlayableCombinations(virtualHand, virtualMana, virtualArcana, aiField);
+
+      for (const combo of playableCombos) {
+        let planScore = 0;
+
+        // 1. チャージの妥当性評価
+        if (chargeCard) {
+          const currentElements = new Set(aiArcana.map(c => c.element || c.system || '無'));
+          const chargeEl = chargeCard.element || chargeCard.system;
+          // 新属性解放なら大加点
+          if (chargeEl && chargeEl !== '無' && chargeEl !== 'Neutral' && !currentElements.has(chargeEl)) {
+            planScore += 65;
+          }
+
+          // チャージしたのにそのマナを使わずに余らせた場合は「無駄捨て」として大減点
+          const totalCostUsed = combo.reduce((sum, act) => sum + act.card.cost, 0);
+          if (totalCostUsed <= aiArcana.length) {
+            planScore -= 60; // チャージしなくても出せたのに手札を捨てたペナルティ
+          } else {
+            planScore += 25; // チャージしたおかげで高コストや複数展開が実現できた報酬
+          }
+        }
+
+        // 2. カードプレイによる盤面向上スコア
+        for (const action of combo) {
+          planScore += (action.card.cost * 18); // コスト消費に応じた基本出力価値
+          const cType = action.card.cardType || action.card.type;
+          if (cType === 'UNIT' || cType === 'Unit' || cType === 'EVOLUTION' || cType === 'Evolution') {
+            planScore += (action.card.atk ?? 0) * 0.5 + (action.card.def ?? 0) * 0.6;
+            const kw = (action.card.keywords || []) as string[];
+            if (kw.includes('守護') || kw.includes('Guard')) planScore += 35;
+          }
+          if (action.card.id === 'BR-08') planScore += 45; // クリムゾン・ドラゴンの破壊付加価値
+          if (action.card.id === 'BB-12') planScore += 40; // バウンス付加価値
+        }
+
+        // 3. 手札温存ボーナス（残手札1枚につき20点、手札0枚になる危険を防止）
+        const remainingHandCount = virtualHand.length - combo.length;
+        planScore += (remainingHandCount * 20);
+
+        // 4. 攻撃シミュレーションスコア
+        const simulatedAttacks = this.evaluateAttacks(aiField, playerField, player.barrier, player.runes.length);
+        const attackScore = simulatedAttacks.reduce((sum, att) => sum + att.score, 0);
+        planScore += attackScore;
+
+        if (planScore > bestPlan.totalScore) {
+          bestPlan = {
+            chargeCard,
+            plays: combo,
+            attacks: simulatedAttacks,
+            totalScore: planScore,
+            reason: chargeCard ? `カード[${chargeCard.name}]をチャージして最大展開` : `チャージ温存して展開`,
+          };
         }
       }
     }
 
-    // 結界に十分余裕があり(3〜5枚)、守護ユニットが一方的に死ぬ場合はスルー
+    return bestPlan;
+  }
+
+  // プレイ可能な組み合わせ探索ヘルパー
+  public static findPlayableCombinations(
+    hand: Card[],
+    availableMana: number,
+    arcana: Card[],
+    field: BoardUnit[]
+  ): CardPlayAction[][] {
+    const results: CardPlayAction[][] = [[]]; // 何もプレイしない選択肢も含む
+
+    // プレイ可能な単体カード
+    const playableCards = hand.filter(c => c.cost <= availableMana && this.checkAffinity(c, arcana));
+
+    // 単体プレイ
+    for (const card of playableCards) {
+      results.push([{ card }]);
+
+      // 2枚コンボ（低コストの組み合わせ）
+      const remainingMana = availableMana - card.cost;
+      const secondCards = hand.filter(
+        c => c.instanceId !== card.instanceId && c.cost <= remainingMana && this.checkAffinity(c, arcana)
+      );
+      for (const sc of secondCards) {
+        results.push([{ card }, { card: sc }]);
+      }
+    }
+
+    return results;
+  }
+
+  // 守護判断
+  public static shouldGuard(state: GameState, attacker: BoardUnit, availableGuardians: BoardUnit[]): BoardUnit | null {
+    if (availableGuardians.length === 0) return null;
+    const ai = state.opponent || state.player2;
+    const atk = attacker.currentAtk ?? attacker.card.atk ?? 0;
+    const brk = attacker.currentBrk ?? attacker.card.brk ?? 1;
+
+    for (const g of availableGuardians) {
+      const def = g.currentDef ?? g.card.def ?? 0;
+      if (def > atk) return g; // 相手自爆なら即守護
+      if (ai.barrier <= brk) return g; // 即死回避の身代わり
+      if (g.card.id === 'BD-02' && brk >= 2) return g; // マリーの有効活用
+      if (def === atk && attacker.card.cost >= g.card.cost) return g; // 有利相打ち
+    }
     return null;
+  }
+
+  // 互換性ヘルパー：個別最高攻撃の選択
+  public static selectBestAttack(state: GameState): AttackAction | null {
+    const ai = state.opponent || state.player2;
+    const player = state.player || state.player1;
+    const aiField = ai.field.map(u => toBoardUnit(state, 'player2', u));
+    const playerField = player.field.map(u => toBoardUnit(state, 'player1', u));
+    const attacks = this.evaluateAttacks(aiField, playerField, player.barrier, player.runes.length);
+    if (attacks.length === 0) return null;
+    return attacks.sort((a, b) => b.score - a.score)[0];
+  }
+
+  // 互換性ヘルパー：マナチャージ候補選定
+  public static selectManaChargeCard(playerState: PlayerState): Card | null {
+    const hand = playerState.hand.map(toFullCard);
+    if (hand.length <= 1) return null;
+    return hand.sort((a, b) => a.cost - b.cost)[0] || null;
   }
 }
 
-/** 使用可能マナと系統条件、空き枠を満たすAIの手札カード一覧を取得 */
+/**
+ * プレイ可能カード一覧を取得するヘルパー（後方互換）
+ */
 export function getAIPlayableCards(state: GameState): (Card & { instanceId: string })[] {
-  const ai = state.player2;
-  const human = state.player1;
-  const currentArcana = ai.currentArcana;
-
-  const currentAffinities = new Set(ai.arcana.map(a => getCard(a.cardId).system));
-
+  const ai = state.opponent || state.player2;
+  const human = state.player || state.player1;
   const playable: (Card & { instanceId: string })[] = [];
 
   for (const cardInst of ai.hand) {
     const tpl = getCard(cardInst.cardId);
-    if (currentArcana < tpl.cost) continue;
+    if (tpl.cost > ai.currentArcana) continue;
 
-    // Affinity check
-    const hasAffinity = tpl.system === 'Neutral' || currentAffinities.has(tpl.system);
-    if (!hasAffinity) continue;
+    // 系統一致チェック
+    const requiredSystem = tpl.element || tpl.system;
+    if (requiredSystem && requiredSystem !== 'Neutral' && requiredSystem !== '無') {
+      const norm = (s: string) => {
+        if (s === 'Fire' || s === '火') return 'Fire';
+        if (s === 'Water' || s === '水') return 'Water';
+        if (s === 'Earth' || s === '地') return 'Earth';
+        if (s === 'Light' || s === '光') return 'Light';
+        if (s === 'Dark' || s === '闇') return 'Dark';
+        return 'Neutral';
+      };
+      const hasSystem = ai.arcana.some(a => {
+        const aTpl = getCard(a.cardId);
+        return norm(aTpl.element || aTpl.system) === norm(requiredSystem);
+      });
+      if (!hasSystem) continue;
+    }
 
-    // Type constraints
-    if (tpl.type === 'Unit' && ai.field.length >= 6) continue;
     if (tpl.type === 'Evolution') {
-      const hasTarget = ai.field.some(
-        u => getCard(u.cards[0].cardId).lineage === tpl.evolutionTarget
-      );
+      const hasTarget = ai.field.some(u => {
+        const baseCard = getCard(u.cards[0].cardId);
+        return baseCard.lineage === tpl.evolutionTarget;
+      });
       if (!hasTarget) continue;
     }
-    if (tpl.type === 'Rune' && ai.runes.length >= 2) continue;
-    if (tpl.type === 'Domain' && ai.domain) continue;
 
-    // Specific spell targets requirement check
     if (tpl.type === 'Spell') {
-      if (tpl.id === 'BR-12' && !human.field.some(u => calculateUnitStats(state, 'player1', u).def <= 20)) {
-        continue;
-      }
       if (tpl.id === 'BB-12' && !human.field.some(u => getCard(u.cards[0].cardId).cost <= 5)) {
         continue;
       }
@@ -455,6 +470,8 @@ export function getAIPlayableCards(state: GameState): (Card & { instanceId: stri
 
     playable.push({
       ...tpl,
+      element: tpl.element || tpl.system,
+      cardType: tpl.cardType || tpl.type,
       instanceId: cardInst.instanceId,
     });
   }
@@ -462,11 +479,13 @@ export function getAIPlayableCards(state: GameState): (Card & { instanceId: stri
   return playable;
 }
 
-/** カードプレイ時の具体的なGameActionを決定する */
+/**
+ * カードプレイ時の具体的なGameActionを決定する（後方互換）
+ */
 export function getAIPlayAction(state: GameState, card: Card & { instanceId: string }): GameAction {
   const tpl = getCard(card.id);
-  const ai = state.player2;
-  const human = state.player1;
+  const ai = state.opponent || state.player2;
+  const human = state.player || state.player1;
 
   if (tpl.type === 'Evolution') {
     const evoTarget = ai.field.find(
@@ -480,192 +499,58 @@ export function getAIPlayAction(state: GameState, card: Card & { instanceId: str
     return {
       type: 'PLAY_CARD',
       instanceId: card.instanceId,
-      evolutionTargetId: evoTarget?.instanceId,
+      evolutionTargetId: evoTarget ? evoTarget.instanceId : undefined,
       targetId,
     };
   }
 
-  if (tpl.type === 'Unit') {
-    if (tpl.id === 'BR-08') {
-      const target = human.field.find(u => calculateUnitStats(state, 'player1', u).def <= 40);
-      return { type: 'PLAY_CARD', instanceId: card.instanceId, targetId: target?.instanceId };
-    }
-    if (tpl.id === 'BB-09') {
-      if (human.field.length > 0) {
-        const sorted = [...human.field].sort(
-          (a, b) => calculateUnitStats(state, 'player1', b).atk - calculateUnitStats(state, 'player1', a).atk
-        );
-        return { type: 'PLAY_CARD', instanceId: card.instanceId, targetId: sorted[0].instanceId };
-      }
-    }
-    if (tpl.id === 'BW-05') {
-      const active = human.field.find(u => !u.isRested);
-      return { type: 'PLAY_CARD', instanceId: card.instanceId, targetId: active?.instanceId };
-    }
-    if (tpl.id === 'BW-08') {
-      const item = ai.archive.find(c => ['Spell', 'Rune'].includes(getCard(c.cardId).type));
-      return { type: 'PLAY_CARD', instanceId: card.instanceId, targetId: item?.instanceId };
-    }
-    if (tpl.id === 'BD-10') {
-      const darkCards = ai.archive.filter(c => getCard(c.cardId).system === 'Dark');
-      return { type: 'PLAY_CARD', instanceId: card.instanceId, targetId: darkCards.slice(0, 2).map(c => c.instanceId).join(',') };
-    }
-    return { type: 'PLAY_CARD', instanceId: card.instanceId };
-  }
-
   if (tpl.type === 'Spell') {
-    if (tpl.id === 'BR-12') {
-      const target = human.field.find(u => calculateUnitStats(state, 'player1', u).def <= 20);
-      return { type: 'PLAY_CARD', instanceId: card.instanceId, targetId: target?.instanceId };
-    }
+    let targetId: string | undefined;
     if (tpl.id === 'BB-12') {
-      const target = human.field.find(u => getCard(u.cards[0].cardId).cost <= 5);
-      return { type: 'PLAY_CARD', instanceId: card.instanceId, targetId: target?.instanceId };
+      const valid = human.field.filter(u => getCard(u.cards[0].cardId).cost <= 5);
+      if (valid.length > 0) {
+        valid.sort((a, b) => getCard(b.cards[0].cardId).cost - getCard(a.cards[0].cardId).cost);
+        targetId = valid[0].instanceId;
+      }
+    } else if (tpl.id === 'BG-13') {
+      const valid = human.field.filter(u => calculateUnitStats(state, 'player1', u).def <= 60);
+      if (valid.length > 0) {
+        valid.sort((a, b) => calculateUnitStats(state, 'player1', b).def - calculateUnitStats(state, 'player1', a).def);
+        targetId = valid[0].instanceId;
+      }
+    } else if (tpl.id === 'BW-12') {
+      const activeUnits = human.field.filter(u => !u.isRested);
+      if (activeUnits.length > 0) {
+        activeUnits.sort((a, b) => calculateUnitStats(state, 'player1', b).atk - calculateUnitStats(state, 'player1', a).atk);
+        targetId = activeUnits[0].instanceId;
+      }
+    } else if (tpl.id === 'BW-13') {
+      const validArchive = ai.archive.filter(c => ['Spell', 'Rune'].includes(getCard(c.cardId).type));
+      if (validArchive.length > 0) {
+        targetId = validArchive[0].instanceId;
+      }
     }
-    if (tpl.id === 'BG-13') {
-      const target = human.field.find(u => calculateUnitStats(state, 'player1', u).def <= 60);
-      return { type: 'PLAY_CARD', instanceId: card.instanceId, targetId: target?.instanceId };
-    }
-    if (tpl.id === 'BW-12') {
-      const active = human.field.find(u => !u.isRested);
-      return { type: 'PLAY_CARD', instanceId: card.instanceId, targetId: active?.instanceId };
-    }
-    if (tpl.id === 'BW-13') {
-      const item = ai.archive.find(c => ['Spell', 'Rune'].includes(getCard(c.cardId).type));
-      return { type: 'PLAY_CARD', instanceId: card.instanceId, targetId: item?.instanceId };
-    }
-    if (tpl.id === 'BD-13') {
-      return { type: 'PLAY_CARD', instanceId: card.instanceId, targetId: human.field[0]?.instanceId };
-    }
-    if (tpl.id === 'BN-04') {
-      return { type: 'PLAY_CARD', instanceId: card.instanceId, targetId: human.runes[0]?.instanceId };
-    }
-    return { type: 'PLAY_CARD', instanceId: card.instanceId };
+
+    return {
+      type: 'PLAY_CARD',
+      instanceId: card.instanceId,
+      targetId,
+    };
   }
 
-  return { type: 'PLAY_CARD', instanceId: card.instanceId };
-}
-
-/**
- * 従来の即時計算インターフェース互換関数（ScriptiaAIEngineを使用）
- */
-export function computeNextAIAction(state: GameState): GameAction | null {
-  if (state.winner) return null;
-
-  // 1. Handle Prompts targeting Player 2 (AI)
-  if (state.prompt && state.prompt.playerId === 'player2') {
-    if (state.prompt.type === 'GUARD') {
-      const opp = state.player2;
-      const guarders = opp.field
-        .map(u => toBoardUnit(state, 'player2', u))
-        .filter(u => !u.isRested && canUnitGuard(u));
-
-      if (guarders.length === 0) {
-        return { type: 'RESOLVE_GUARD' };
-      }
-
-      let attacker: BoardUnit = {
-        instanceId: 'dummy',
-        cards: [],
-        isRested: false,
-        hasSummoningSickness: false,
-        modifiers: [],
-        card: { id: 'dummy', name: '敵', cost: 3, system: 'Neutral', type: 'Unit', atk: 30, def: 30, brk: 1 },
-        currentAtk: 30,
-        currentDef: 30,
-        currentBrk: 1,
-      };
-
-      if (state.prompt.attackerId) {
-        const aUnit = state.player1.field.find(u => u.instanceId === state.prompt!.attackerId);
-        if (aUnit) {
-          attacker = toBoardUnit(state, 'player1', aUnit);
-        }
-      }
-
-      const chosenGuarder = ScriptiaAIEngine.shouldGuard(state, attacker, guarders);
-      if (chosenGuarder) {
-        return { type: 'RESOLVE_GUARD', guarderId: chosenGuarder.instanceId };
-      }
-      return { type: 'RESOLVE_GUARD' };
+  // 通常ユニット・ドメイン・ルーン
+  let targetId: string | undefined;
+  if (tpl.id === 'BR-08' && human.field.length > 0) {
+    const valid = human.field.filter(u => calculateUnitStats(state, 'player1', u).def <= 30);
+    if (valid.length > 0) {
+      valid.sort((a, b) => calculateUnitStats(state, 'player1', b).def - calculateUnitStats(state, 'player1', a).def);
+      targetId = valid[0].instanceId;
     }
-
-    if (state.prompt.type === 'TRIGGER' || state.prompt.type === 'RUNE_TRIGGER') {
-      return { type: 'RESOLVE_TRIGGER', apply: true };
-    }
-
-    return null;
   }
-
-  // 2. Only act when it is Player 2's turn
-  if (state.currentPlayer !== 'player2') return null;
-
-  const ai = state.player2;
-
-  // 3. Arcana Placement Phase
-  if (state.phase === 'ARCANA_PLACEMENT') {
-    if (!state.flags.hasPlacedArcanaThisTurn && ai.hand.length > 0) {
-      const chargeCard = ScriptiaAIEngine.selectManaChargeCard(ai);
-      if (chargeCard) {
-        return { type: 'PLACE_ARCANA', instanceId: chargeCard.instanceId };
-      }
-    }
-    return { type: 'NEXT_PHASE' };
-  }
-
-  // 4. Action Phase
-  if (state.phase === 'ACTION') {
-    // 4A. Play playable card
-    const playable = getAIPlayableCards(state);
-    if (playable.length > 0) {
-      const bestCard = [...playable].sort((a, b) => b.cost - a.cost)[0];
-      return getAIPlayAction(state, bestCard);
-    }
-
-    // 4B. Attack
-    const bestAttack = ScriptiaAIEngine.selectBestAttack(state);
-    if (bestAttack) {
-      if (bestAttack.targetType === 'PLAYER') {
-        return { type: 'DECLARE_ATTACK', attackerId: bestAttack.attacker.instanceId };
-      }
-      if (bestAttack.targetUnit) {
-        return {
-          type: 'DECLARE_ATTACK',
-          attackerId: bestAttack.attacker.instanceId,
-          targetId: bestAttack.targetUnit.instanceId,
-        };
-      }
-    }
-
-    // End turn
-    return { type: 'NEXT_PHASE' };
-  }
-
-  return { type: 'NEXT_PHASE' };
-}
-
-/**
- * React Hook that reliably drives AI turns
- */
-export function useAIEngine(state: GameState, dispatch: React.Dispatch<GameAction>) {
-  const isAITurn = state.currentPlayer === 'player2';
-  const isAIPrompt = state.prompt?.playerId === 'player2';
-
-  useEffect(() => {
-    if (state.winner) return;
-    if (!isAIPrompt && !isAITurn) return;
-
-    // If AI prompt (like GUARD), resolve it quickly
-    if (isAIPrompt) {
-      const timer = setTimeout(() => {
-        const action = computeNextAIAction(state);
-        if (action) dispatch(action);
-      }, 700);
-      return () => clearTimeout(timer);
-    }
-  }, [state, isAIPrompt, isAITurn, dispatch]);
 
   return {
-    isAIThinking: isAITurn || isAIPrompt,
+    type: 'PLAY_CARD',
+    instanceId: card.instanceId,
+    targetId,
   };
 }

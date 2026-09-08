@@ -28,7 +28,10 @@ export interface CardTemplate {
   };
 }
 
-export type Card = CardTemplate;
+export type Card = CardTemplate & {
+  instanceId?: string;
+  cardId?: string;
+};
 
 export interface CardInstance {
   instanceId: string;

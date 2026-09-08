@@ -322,94 +322,83 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
     isRunningAITurnRef.current = true;
 
     try {
-      // ----------------------------------------
-      // フェーズ1：マナチャージ思考
-      // ----------------------------------------
-      if (stateRef.current.phase === 'ARCANA_PLACEMENT' && !stateRef.current.flags.hasPlacedArcanaThisTurn) {
-        setAiThinkingText('アルカナチャージを思考中...');
-        await sleep(1000);
-        if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) return;
+      if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) return;
 
-        const cardToCharge = ScriptiaAIEngine.selectManaChargeCard(stateRef.current.player2);
-        if (cardToCharge) {
-          showToast(`相手がアルカナに【${cardToCharge.name}】を配置`, 'info');
+      // ① 総合プランの策定（全シミュレーション）
+      const plan = ScriptiaAIEngine.planBestTurn(stateRef.current);
+      console.log("AI策定プラン:", plan.reason, "スコア:", plan.totalScore);
+      setAiThinkingText(plan.reason);
+
+      // ② マナチャージの実行（プランでチャージが選ばれた場合のみ）
+      if (stateRef.current.phase === 'ARCANA_PLACEMENT' && !stateRef.current.flags.hasPlacedArcanaThisTurn) {
+        if (plan.chargeCard && plan.chargeCard.instanceId) {
+          await sleep(1000);
+          if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) return;
+          showToast(`相手がアルカナに【${plan.chargeCard.name}】を配置`, 'info');
           soundManager.playManaCharge();
-          dispatch({ type: 'PLACE_ARCANA', instanceId: cardToCharge.instanceId });
+          dispatch({ type: 'PLACE_ARCANA', instanceId: plan.chargeCard.instanceId });
           await sleep(800);
         } else {
-          dispatch({ type: 'NEXT_PHASE' });
-          await sleep(600);
+          await sleep(600); // チャージしない場合も少し思考ウェイト
+          if (stateRef.current.phase === 'ARCANA_PLACEMENT' && !stateRef.current.flags.hasPlacedArcanaThisTurn) {
+            dispatch({ type: 'NEXT_PHASE' });
+            await sleep(600);
+          }
         }
       }
 
       if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) return;
 
-      // ----------------------------------------
-      // フェーズ2：展開（召喚・スペル・進化）ループ
-      // ----------------------------------------
-      let canContinuePlay = true;
-      let playLoopCount = 0;
-      while (canContinuePlay && playLoopCount < 8) {
+      // ③ カードプレイの順次実行
+      for (const playAction of plan.plays) {
         if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) return;
         while (stateRef.current.prompt) {
           await sleep(300);
           if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) return;
         }
 
-        const playable = getAIPlayableCards(stateRef.current);
-        if (playable.length === 0 || stateRef.current.player2.field.length >= 6) {
-          canContinuePlay = false;
-          break;
+        await sleep(900);
+        const card = playAction.card;
+        if (!card.instanceId) continue;
+
+        if (stateRef.current.player2.field.length >= 6 && card.type !== 'Evolution' && card.cardType !== 'EVOLUTION') {
+          continue;
         }
 
-        // 最もコスト効率・戦力効率の高いカードを1枚選定してプレイ
-        const bestCardToPlay = [...playable].sort((a, b) => b.cost - a.cost)[0];
-        setAiThinkingText(`【${bestCardToPlay.name}】を展開中...`);
-        await sleep(1000);
-
-        if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) return;
-
-        const playAction = getAIPlayAction(stateRef.current, bestCardToPlay);
-        const isEvolution = bestCardToPlay.type === 'Evolution';
-
+        setAiThinkingText(`【${card.name}】を展開中...`);
+        const isEvolution = card.type === 'Evolution' || card.cardType === 'EVOLUTION';
         if (isEvolution) {
           soundManager.playEvolve();
-          showToast(`相手が【${bestCardToPlay.name}】へ進化！`, 'warn');
-        } else if (bestCardToPlay.type === 'Spell') {
+          showToast(`相手が【${card.name}】へ進化！`, 'warn');
+        } else if (card.type === 'Spell' || card.cardType === 'SPELL') {
           soundManager.playCardSwipe();
-          showToast(`相手がスペル【${bestCardToPlay.name}】を詠唱！`, 'info');
+          showToast(`相手がスペル【${card.name}】を詠唱！`, 'info');
         } else {
           soundManager.playSummonUnit();
-          showToast(`相手が【${bestCardToPlay.name}】を召喚！`, 'info');
+          showToast(`相手が【${card.name}】を召喚！`, 'info');
         }
 
-        dispatch(playAction);
-        playLoopCount++;
+        const action = getAIPlayAction(stateRef.current, card as any);
+        dispatch(action);
         await sleep(1000);
       }
 
       if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) return;
 
-      // ----------------------------------------
-      // フェーズ3：攻撃ループ（自爆回避・有利トレード）
-      // ----------------------------------------
-      let canContinueAttack = true;
-      let attackLoopCount = 0;
-      while (canContinueAttack && attackLoopCount < 8) {
+      // ④ 攻撃の順次実行
+      for (const attack of plan.attacks) {
         if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) return;
         while (stateRef.current.prompt) {
           await sleep(300);
           if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) return;
         }
 
-        const bestAttack = ScriptiaAIEngine.selectBestAttack(stateRef.current);
-        if (!bestAttack) {
-          canContinueAttack = false;
-          break;
-        }
+        const currentAttacker = stateRef.current.player2.field.find(u => u.instanceId === attack.attacker.instanceId);
+        if (!currentAttacker || currentAttacker.isRested) continue;
 
-        setAiThinkingText(bestAttack.reason);
-        setActiveAttackerId(bestAttack.attacker.instanceId);
+        await sleep(1100);
+        setAiThinkingText(attack.targetType === 'PLAYER' ? '相手プレイヤー/結界へ攻撃' : `相手の【${attack.targetUnit?.card.name}】へ攻撃`);
+        setActiveAttackerId(attack.attacker.instanceId);
         soundManager.playAttackLock();
         await sleep(600);
 
@@ -418,27 +407,29 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
           return;
         }
 
-        // 攻撃の実行
         soundManager.playAttackClash();
         setIsScreenShaking(true);
         setTimeout(() => setIsScreenShaking(false), 380);
 
-        if (bestAttack.targetType === 'PLAYER') {
-          showToast(`相手の【${bestAttack.attacker.card.name}】がプレイヤーへ直接攻撃！`, 'warn');
-          dispatch({ type: 'DECLARE_ATTACK', attackerId: bestAttack.attacker.instanceId });
-        } else if (bestAttack.targetUnit) {
-          showToast(`相手の【${bestAttack.attacker.card.name}】が【${bestAttack.targetUnit.card.name}】へ攻撃！`, 'warn');
-          dispatch({
-            type: 'DECLARE_ATTACK',
-            attackerId: bestAttack.attacker.instanceId,
-            targetId: bestAttack.targetUnit.instanceId,
-          });
+        if (attack.targetType === 'PLAYER') {
+          showToast(`相手の【${attack.attacker.card.name}】がプレイヤーへ直接攻撃！`, 'warn');
+          dispatch({ type: 'DECLARE_ATTACK', attackerId: attack.attacker.instanceId });
+        } else if (attack.targetUnit) {
+          const targetExists = stateRef.current.player1.field.some(u => u.instanceId === attack.targetUnit!.instanceId);
+          if (targetExists) {
+            showToast(`相手の【${attack.attacker.card.name}】が【${attack.targetUnit.card.name}】へ攻撃！`, 'warn');
+            dispatch({
+              type: 'DECLARE_ATTACK',
+              attackerId: attack.attacker.instanceId,
+              targetId: attack.targetUnit.instanceId,
+            });
+          } else if (!attack.attacker.card.restrictions?.cannotAttackPlayer) {
+            showToast(`相手の【${attack.attacker.card.name}】がプレイヤーへ攻撃！`, 'warn');
+            dispatch({ type: 'DECLARE_ATTACK', attackerId: attack.attacker.instanceId });
+          }
         }
 
         setActiveAttackerId(null);
-        attackLoopCount++;
-
-        // Wait for attack / guard / triggers to resolve
         await sleep(1100);
         while (stateRef.current.prompt) {
           await sleep(300);
@@ -448,9 +439,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
 
       if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) return;
 
-      // ----------------------------------------
-      // フェーズ4：ターン終了
-      // ----------------------------------------
+      // ⑤ ターン終了
       setAiThinkingText('ターン終了');
       await sleep(800);
       if (stateRef.current.currentPlayer === 'player2' && !stateRef.current.winner) {
