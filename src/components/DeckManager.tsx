@@ -14,11 +14,10 @@ export interface UserDeck {
 export const STORAGE_KEY = 'scriptia_user_decks_v2';
 export const ACTIVE_DECK_KEY = 'scriptia_active_deck_id';
 
-// 6系統の初期ベーシックデッキ（公式プリセット・名称を「系統」に統一）
 export const STARTER_DECK_FIRE: UserDeck = {
   id: 'deck_fire_basic',
   name: '火系統ベーシックデッキ',
-  keyCardId: 'BR-10', // ボルカノ・ドラゴン
+  keyCardId: 'BR-10',
   cards: [
     { cardId: 'BR-01', count: 4 }, { cardId: 'BR-02', count: 4 },
     { cardId: 'BR-03', count: 4 }, { cardId: 'BR-04', count: 4 },
@@ -32,7 +31,7 @@ export const STARTER_DECK_FIRE: UserDeck = {
 export const STARTER_DECK_WATER: UserDeck = {
   id: 'deck_water_basic',
   name: '水系統ベーシックデッキ',
-  keyCardId: 'BB-11', // ルミナス・トライデント
+  keyCardId: 'BB-11',
   cards: [
     { cardId: 'BB-01', count: 4 }, { cardId: 'BB-02', count: 4 },
     { cardId: 'BB-04', count: 4 }, { cardId: 'BB-05', count: 4 },
@@ -46,7 +45,7 @@ export const STARTER_DECK_WATER: UserDeck = {
 export const STARTER_DECK_LIGHT: UserDeck = {
   id: 'deck_light_basic',
   name: '光系統ベーシックデッキ',
-  keyCardId: 'BW-11', // 天聖護神 ソル・アイギス
+  keyCardId: 'BW-11',
   cards: [
     { cardId: 'BW-01', count: 4 }, { cardId: 'BW-02', count: 4 },
     { cardId: 'BW-03', count: 4 }, { cardId: 'BW-04', count: 4 },
@@ -57,80 +56,13 @@ export const STARTER_DECK_LIGHT: UserDeck = {
   updatedAt: Date.now(),
 };
 
-export const STARTER_DECK_DARK: UserDeck = {
-  id: 'deck_dark_basic',
-  name: '闇系統ベーシックデッキ',
-  keyCardId: 'BD-11', // 傀儡魔王 ネクロシア
-  cards: [
-    { cardId: 'BD-01', count: 4 }, { cardId: 'BD-02', count: 4 },
-    { cardId: 'BD-03', count: 4 }, { cardId: 'BD-04', count: 4 },
-    { cardId: 'BD-06', count: 4 }, { cardId: 'BD-07', count: 4 },
-    { cardId: 'BD-08', count: 4 }, { cardId: 'BD-09', count: 4 },
-    { cardId: 'BD-11', count: 4 }, { cardId: 'BD-14', count: 4 },
-  ],
-  updatedAt: Date.now(),
-};
-
-export const STARTER_DECK_EARTH: UserDeck = {
-  id: 'deck_earth_basic',
-  name: '地系統ベーシックデッキ',
-  keyCardId: 'BG-11', // 万虫覇王 アトラスロード
-  cards: [
-    { cardId: 'BG-01', count: 4 }, { cardId: 'BG-02', count: 4 },
-    { cardId: 'BG-03', count: 4 }, { cardId: 'BG-04', count: 4 },
-    { cardId: 'BG-05', count: 4 }, { cardId: 'BG-07', count: 4 },
-    { cardId: 'BG-08', count: 4 }, { cardId: 'BG-09', count: 4 },
-    { cardId: 'BG-11', count: 4 }, { cardId: 'BG-12', count: 4 },
-  ],
-  updatedAt: Date.now(),
-};
-
 export const STARTER_DECK_CONTROL = STARTER_DECK_WATER;
 
 export const PRESET_DECKS: UserDeck[] = [
   STARTER_DECK_FIRE,
   STARTER_DECK_WATER,
   STARTER_DECK_LIGHT,
-  STARTER_DECK_DARK,
-  STARTER_DECK_EARTH,
 ];
-
-// カード系統・種別判定ヘルパー
-const getCardSystem = (c: CardTemplate | Card): 'Fire' | 'Water' | 'Dark' | 'Light' | 'Earth' | 'Neutral' => {
-  const el = c.system || c.element;
-  if (el === '火' || el === 'Fire') return 'Fire';
-  if (el === '水' || el === 'Water') return 'Water';
-  if (el === '地' || el === 'Earth' || el === '自然') return 'Earth';
-  if (el === '光' || el === 'Light') return 'Light';
-  if (el === '闇' || el === 'Dark') return 'Dark';
-  return 'Neutral';
-};
-
-const getCardType = (c: CardTemplate | Card): 'UNIT' | 'EVOLUTION' | 'SPELL' | 'RUNE' | 'DOMAIN' => {
-  const t = ((c.cardType || c.type || 'Unit') as string).toUpperCase();
-  if (t === 'EVOLUTION') return 'EVOLUTION';
-  if (t === 'SPELL') return 'SPELL';
-  if (t === 'RUNE') return 'RUNE';
-  if (t === 'DOMAIN') return 'DOMAIN';
-  return 'UNIT';
-};
-
-const formatCardTypeJapanese = (type: 'UNIT' | 'EVOLUTION' | 'SPELL' | 'RUNE' | 'DOMAIN'): string => {
-  if (type === 'EVOLUTION') return '進化ユニット';
-  if (type === 'SPELL') return 'スペル';
-  if (type === 'RUNE') return 'ルーン';
-  if (type === 'DOMAIN') return 'ドメイン';
-  return 'ユニット';
-};
-
-const formatSystemJapanese = (sys: string): string => {
-  if (sys === 'Fire') return '火';
-  if (sys === 'Water') return '水';
-  if (sys === 'Light') return '光';
-  if (sys === 'Dark') return '闇';
-  if (sys === 'Earth') return '地';
-  return '無';
-};
 
 export const DeckManager: React.FC<{ onBackToBattle: (deck: UserDeck) => void }> = ({ onBackToBattle }) => {
   const [viewMode, setViewMode] = useState<'LIST' | 'EDIT'>('LIST');
@@ -138,13 +70,12 @@ export const DeckManager: React.FC<{ onBackToBattle: (deck: UserDeck) => void }>
   const [selectedDeckId, setSelectedDeckId] = useState<string>('');
   const [editingDeck, setEditingDeck] = useState<UserDeck | null>(null);
 
-  // 編集用フィルタ・検索・プレビュー
+  // 編集用ステート
   const [selectedElement, setSelectedElement] = useState<string>('ALL');
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>('ALL');
+  const [showTypeDropdown, setShowTypeDropdown] = useState<boolean>(false);
   const [searchText, setSearchText] = useState<string>('');
   const [previewCard, setPreviewCard] = useState<Card | null>(null);
-
-  // オススメカード候補モーダル
   const [showSuggestModal, setShowSuggestModal] = useState<boolean>(false);
 
   useEffect(() => {
@@ -168,16 +99,11 @@ export const DeckManager: React.FC<{ onBackToBattle: (deck: UserDeck) => void }>
 
   const currentSelectedDeck = decks.find(d => d.id === selectedDeckId) || decks[0] || PRESET_DECKS[0];
 
-  // デッキの完全統計計算（ユニット・スペル・ルーン・ドメイン各枚数、マナカーブ、系統）
   const calculateDeckStats = (deck: UserDeck) => {
     const totalCount = deck.cards.reduce((sum, c) => sum + c.count, 0);
-    const costCurve = [0, 0, 0, 0, 0, 0, 0, 0]; // 1, 2, 3, 4, 5, 6, 7, 8~
+    const costCurve = [0, 0, 0, 0, 0, 0, 0, 0];
     const elementCounts: Record<string, number> = { Light: 0, Water: 0, Dark: 0, Fire: 0, Earth: 0, Neutral: 0 };
-    let unitCount = 0;
-    let evolutionCount = 0;
-    let spellCount = 0;
-    let runeCount = 0;
-    let domainCount = 0;
+    let unitCount = 0, spellCount = 0, runeCount = 0, domainCount = 0;
 
     deck.cards.forEach(entry => {
       const card = CARDS.find(c => c.id === entry.cardId);
@@ -186,28 +112,22 @@ export const DeckManager: React.FC<{ onBackToBattle: (deck: UserDeck) => void }>
       const idx = card.cost >= 8 ? 7 : Math.max(0, card.cost - 1);
       costCurve[idx] += entry.count;
 
-      const el = getCardSystem(card);
+      const el = card.element === '火' ? 'Fire' : card.element === '水' ? 'Water' : card.element === '地' ? 'Earth' : card.element === '光' ? 'Light' : card.element === '闇' ? 'Dark' : 'Neutral';
       elementCounts[el] = (elementCounts[el] || 0) + entry.count;
 
-      const cType = getCardType(card);
-      if (cType === 'UNIT') unitCount += entry.count;
-      else if (cType === 'EVOLUTION') {
-        unitCount += entry.count;
-        evolutionCount += entry.count;
-      } else if (cType === 'SPELL') spellCount += entry.count;
-      else if (cType === 'RUNE') runeCount += entry.count;
-      else if (cType === 'DOMAIN') domainCount += entry.count;
+      if (card.cardType === 'UNIT' || card.cardType === 'EVOLUTION') unitCount += entry.count;
+      else if (card.cardType === 'SPELL') spellCount += entry.count;
+      else if (card.cardType === 'RUNE') runeCount += entry.count;
+      else if (card.cardType === 'DOMAIN') domainCount += entry.count;
     });
 
     const keyCard = CARDS.find(c => c.id === deck.keyCardId) || CARDS.find(c => c.id === deck.cards[0]?.cardId);
-
-    return { totalCount, costCurve, elementCounts, unitCount, evolutionCount, spellCount, runeCount, domainCount, keyCard };
+    return { totalCount, costCurve, elementCounts, unitCount, spellCount, runeCount, domainCount, keyCard };
   };
 
   const listStats = useMemo(() => calculateDeckStats(currentSelectedDeck), [currentSelectedDeck]);
   const editStats = useMemo(() => editingDeck ? calculateDeckStats(editingDeck) : listStats, [editingDeck, listStats]);
 
-  // 新規作成
   const handleCreateNewDeck = () => {
     const newDeck: UserDeck = {
       id: 'deck_' + Date.now(),
@@ -220,27 +140,23 @@ export const DeckManager: React.FC<{ onBackToBattle: (deck: UserDeck) => void }>
     setViewMode('EDIT');
   };
 
-  // 編集開始
   const handleStartEdit = () => {
     setEditingDeck(JSON.parse(JSON.stringify(currentSelectedDeck)));
     setViewMode('EDIT');
   };
 
-  // デッキ削除
   const handleDeleteDeck = (deckId: string) => {
     if (decks.length <= 1) {
-      alert('最後の1つのデッキは削除できません。');
+      alert("最後の1つのデッキは削除できません。");
       return;
     }
-    if (!confirm('このデッキを削除してもよろしいですか？')) return;
-
+    if (!confirm("このデッキを削除してもよろしいですか？")) return;
     const updated = decks.filter(d => d.id !== deckId);
     setDecks(updated);
     setSelectedDeckId(updated[0].id);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
   };
 
-  // デッキ保存
   const handleSaveDeck = () => {
     if (!editingDeck) return;
     const exists = decks.some(d => d.id === editingDeck.id);
@@ -252,26 +168,23 @@ export const DeckManager: React.FC<{ onBackToBattle: (deck: UserDeck) => void }>
     setViewMode('LIST');
   };
 
-  // キーカード設定
   const handleSetKeyCard = (cardId: string) => {
     if (!editingDeck) return;
     setEditingDeck({ ...editingDeck, keyCardId: cardId });
   };
 
-  // カードプールフィルタ
   const filteredPool = useMemo(() => {
     return CARDS.filter(card => {
       if (selectedElement !== 'ALL') {
-        const el = getCardSystem(card);
-        if (el !== selectedElement) return false;
+        const elNorm = card.element === '火' ? 'Fire' : card.element === '水' ? 'Water' : card.element === '地' ? 'Earth' : card.element === '光' ? 'Light' : card.element === '闇' ? 'Dark' : 'Neutral';
+        if (elNorm !== selectedElement) return false;
       }
       if (selectedTypeFilter !== 'ALL') {
-        const cType = getCardType(card);
-        if (selectedTypeFilter === 'UNIT' && cType !== 'UNIT') return false;
-        if (selectedTypeFilter === 'EVOLUTION' && cType !== 'EVOLUTION') return false;
-        if (selectedTypeFilter === 'SPELL' && cType !== 'SPELL') return false;
-        if (selectedTypeFilter === 'RUNE' && cType !== 'RUNE') return false;
-        if (selectedTypeFilter === 'DOMAIN' && cType !== 'DOMAIN') return false;
+        if (selectedTypeFilter === 'UNIT' && card.cardType !== 'UNIT') return false;
+        if (selectedTypeFilter === 'EVOLUTION' && card.cardType !== 'EVOLUTION') return false;
+        if (selectedTypeFilter === 'SPELL' && card.cardType !== 'SPELL') return false;
+        if (selectedTypeFilter === 'RUNE' && card.cardType !== 'RUNE') return false;
+        if (selectedTypeFilter === 'DOMAIN' && card.cardType !== 'DOMAIN') return false;
       }
       if (searchText.trim()) {
         const q = searchText.toLowerCase();
@@ -281,20 +194,17 @@ export const DeckManager: React.FC<{ onBackToBattle: (deck: UserDeck) => void }>
     });
   }, [selectedElement, selectedTypeFilter, searchText]);
 
-  // オススメ候補カードの算出（デッキの主力系統や未投入枠を推薦）
   const suggestedCards = useMemo(() => {
     if (!editingDeck) return [];
-    // 最も多く投入されている系統を取得
     const dominantEl = (Object.entries(editStats.elementCounts) as [string, number][])
       .sort((a, b) => (b[1] || 0) - (a[1] || 0))[0]?.[0] || 'Fire';
     return CARDS.filter(c => {
-      const el = getCardSystem(c);
+      const elNorm = c.element === '火' ? 'Fire' : c.element === '水' ? 'Water' : c.element === '地' ? 'Earth' : c.element === '光' ? 'Light' : c.element === '闇' ? 'Dark' : 'Neutral';
       const inDeckCount = editingDeck.cards.find(entry => entry.cardId === c.id)?.count || 0;
-      return (el === dominantEl || el === 'Neutral') && inDeckCount < 4;
-    }).slice(0, 12);
+      return (elNorm === dominantEl || elNorm === 'Neutral') && inDeckCount < 4;
+    }).slice(0, 8);
   }, [editingDeck, editStats]);
 
-  // カード追加・削除
   const handleAddCardToEdit = (card: CardTemplate) => {
     if (!editingDeck || editStats.totalCount >= 40) return;
     const currentEntry = editingDeck.cards.find(c => c.cardId === card.id);
@@ -323,50 +233,57 @@ export const DeckManager: React.FC<{ onBackToBattle: (deck: UserDeck) => void }>
     setEditingDeck({ ...editingDeck, cards: newCards });
   };
 
+  const typeFilterLabels: Record<string, string> = {
+    ALL: 'すべての種別',
+    UNIT: 'ユニット',
+    EVOLUTION: '進化ユニット',
+    SPELL: 'スペル',
+    RUNE: 'ルーン',
+    DOMAIN: 'ドメイン',
+  };
+
   return (
-    <div className="fixed inset-0 bg-[#071026] text-white select-none overflow-hidden font-sans flex flex-col">
+    <div className="fixed inset-0 bg-[#060c1d] text-white select-none overflow-hidden font-sans flex flex-col">
       <FloatingCardPreview card={previewCard} onClose={() => setPreviewCard(null)} />
 
       {/* ================================================================= */}
-      {/* 画面1：【デッキ一覧画面（Ver 0.07 完全準拠）】 */}
+      {/* 画面1：デッキ一覧画面 */}
       {/* ================================================================= */}
       {viewMode === 'LIST' && (
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col h-full overflow-hidden">
           {/* ヘッダー */}
-          <div className="h-14 px-6 flex items-center justify-between border-b border-cyan-800/40 bg-[#0b1633]/90 backdrop-blur-md">
-            <div className="flex items-center gap-4">
+          <div className="h-12 px-4 flex items-center justify-between border-b border-cyan-800/40 bg-[#0a142d]/90 shrink-0">
+            <div className="flex items-center gap-3">
               <button
                 onClick={() => {
                   localStorage.setItem(ACTIVE_DECK_KEY, currentSelectedDeck.id);
                   onBackToBattle(currentSelectedDeck);
                 }}
-                className="px-5 py-1.5 bg-gradient-to-b from-red-600 to-red-800 hover:from-red-500 hover:to-red-700 text-white font-bold rounded-lg shadow-md border border-red-400/40 text-sm cursor-pointer transition-all active:scale-95"
+                className="px-4 py-1 bg-gradient-to-b from-red-600 to-red-800 hover:from-red-500 hover:to-red-700 text-white font-bold rounded-lg shadow-md border border-red-400/40 text-xs cursor-pointer transition-all active:scale-95"
               >
                 戻る
               </button>
-              <h1 className="text-xl font-black italic tracking-wider text-cyan-200">
-                SCRIPTIA デッキ一覧 <span className="text-xs text-cyan-400/70 font-mono ml-2">Ver 0.07</span>
+              <h1 className="text-base font-black italic tracking-wider text-cyan-200">
+                SCRIPTIA デッキ一覧 <span className="text-[10px] text-cyan-400/60 font-mono ml-1">Ver 0.07</span>
               </h1>
             </div>
             <div className="text-xs text-slate-400 font-bold">
-              作成デッキ <span className="text-cyan-400 text-base font-black">{decks.length}</span> / 30
+              作成デッキ <span className="text-cyan-400 font-black">{decks.length}</span> / 30
             </div>
           </div>
 
           {/* メインエリア */}
-          <div className="flex-1 flex p-6 gap-6 overflow-hidden">
+          <div className="flex-1 flex p-3 gap-3 overflow-hidden">
             {/* 左側：デッキグリッド */}
-            <div className="flex-1 grid grid-cols-2 gap-4 overflow-y-auto pr-2 custom-scrollbar content-start">
-              {/* 新規作成 */}
+            <div className="flex-1 grid grid-cols-2 gap-2.5 overflow-y-auto pr-1 custom-scrollbar content-start">
               <div
                 onClick={handleCreateNewDeck}
-                className="h-32 border-2 border-dashed border-cyan-600/50 hover:border-cyan-400 rounded-xl bg-slate-900/40 hover:bg-cyan-950/20 flex flex-col items-center justify-center cursor-pointer transition-all group"
+                className="h-24 border-2 border-dashed border-cyan-600/50 hover:border-cyan-400 rounded-xl bg-slate-900/40 hover:bg-cyan-950/20 flex flex-col items-center justify-center cursor-pointer transition-all group"
               >
-                <span className="text-3xl text-cyan-400 group-hover:scale-125 transition-transform mb-1">＋</span>
-                <span className="text-sm font-bold text-cyan-300">新規作成</span>
+                <span className="text-2xl text-cyan-400 group-hover:scale-125 transition-transform">＋</span>
+                <span className="text-xs font-bold text-cyan-300 mt-0.5">新規作成</span>
               </div>
 
-              {/* デッキタイル一覧 */}
               {decks.map((deck) => {
                 const isSelected = deck.id === currentSelectedDeck.id;
                 const stats = calculateDeckStats(deck);
@@ -374,21 +291,20 @@ export const DeckManager: React.FC<{ onBackToBattle: (deck: UserDeck) => void }>
                   <div
                     key={deck.id}
                     onClick={() => setSelectedDeckId(deck.id)}
-                    className={`h-32 rounded-xl p-3.5 flex flex-col justify-between cursor-pointer transition-all border-2 relative overflow-hidden ${isSelected ? 'border-amber-400 bg-[#0f2347] shadow-[0_0_20px_rgba(251,191,36,0.35)]' : 'border-slate-800 bg-[#09152b] hover:border-cyan-700/60'}`}
+                    className={`h-24 rounded-xl p-2 flex flex-col justify-between cursor-pointer transition-all border-2 relative ${isSelected ? 'border-amber-400 bg-[#0e2142] shadow-[0_0_15px_rgba(251,191,36,0.35)]' : 'border-slate-800 bg-[#091428] hover:border-cyan-700/60'}`}
                   >
-                    <div className="flex items-center justify-between z-10">
-                      <span className="font-black text-sm text-white truncate max-w-[180px]">{deck.name}</span>
-                      <span className="text-xs font-mono font-bold text-emerald-400 bg-slate-900/80 px-2 py-0.5 rounded border border-emerald-500/40">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-xs text-white truncate max-w-[130px]">{deck.name}</span>
+                      <span className="text-[10px] font-mono font-bold text-emerald-400 bg-slate-900 px-1.5 py-0.2 rounded border border-emerald-500/40">
                         {stats.totalCount}/40
                       </span>
                     </div>
 
-                    <div className="text-xs text-cyan-300/80 truncate z-10">
+                    <div className="text-[10px] text-cyan-300/80 truncate">
                       キーカード: {stats.keyCard ? stats.keyCard.name : '未設定'}
                     </div>
 
-                    {/* 6系統アイコン別枚数 */}
-                    <div className="flex items-center gap-2.5 z-10 text-[11px] font-mono border-t border-cyan-900/40 pt-1.5">
+                    <div className="flex items-center gap-2 text-[10px] font-mono border-t border-cyan-900/40 pt-1">
                       <span className="text-amber-400">光{stats.elementCounts.Light}</span>
                       <span className="text-cyan-400">水{stats.elementCounts.Water}</span>
                       <span className="text-purple-400">闇{stats.elementCounts.Dark}</span>
@@ -401,30 +317,28 @@ export const DeckManager: React.FC<{ onBackToBattle: (deck: UserDeck) => void }>
               })}
             </div>
 
-            {/* 右側：選択デッキの詳細パネル */}
-            <div className="w-[460px] bg-[#0c1836]/95 border border-cyan-800/60 rounded-2xl p-5 flex flex-col justify-between shadow-2xl overflow-y-auto">
-              <div>
-                {/* キーカードバナー */}
-                <div className="w-full bg-[#08132b] border border-cyan-600/50 rounded-xl p-4 mb-4 relative shadow-inner">
-                  <div className="flex items-center justify-between pb-2 mb-2 border-b border-cyan-500/20">
-                    <span className="text-xs font-bold text-amber-400">★ キーカード</span>
-                    <span className="text-xs font-bold text-cyan-300">
-                      コスト {listStats.keyCard?.cost ?? 0} • {listStats.keyCard ? formatCardTypeJapanese(getCardType(listStats.keyCard)) : 'ユニット'}
-                    </span>
+            {/* 右側：詳細パネル（画面内フィット版） */}
+            <div className="w-[380px] bg-[#09152e]/95 border border-cyan-800/60 rounded-xl p-3 flex flex-col justify-between overflow-hidden shadow-2xl shrink-0">
+              <div className="space-y-2">
+                {/* キーカード表示 */}
+                <div className="bg-[#060e22] border border-cyan-700/40 rounded-lg p-2 relative shadow-inner">
+                  <div className="flex justify-between items-center text-[10px] mb-1">
+                    <span className="font-bold text-amber-400">★ キーカード</span>
+                    <span className="text-cyan-300 font-bold">コスト {listStats.keyCard?.cost ?? 0} • {listStats.keyCard?.cardType === 'EVOLUTION' ? '進化ユニット' : (listStats.keyCard?.cardType || 'ユニット')}</span>
                   </div>
-                  <div className="text-lg font-black text-white">{listStats.keyCard?.name || '未設定'}</div>
-                  <div className="text-xs text-slate-300 mt-1">{listStats.keyCard?.effectText || '通常能力なし'}</div>
-                  {listStats.keyCard && (getCardType(listStats.keyCard) === 'UNIT' || getCardType(listStats.keyCard) === 'EVOLUTION') && (
-                    <div className="mt-2 text-xs font-mono font-bold text-cyan-400">
+                  <div className="text-sm font-black text-white truncate">{listStats.keyCard?.name || '未設定'}</div>
+                  <div className="text-[10px] text-slate-300 line-clamp-1 mt-0.5">{listStats.keyCard?.effectText || '通常能力なし'}</div>
+                  {(listStats.keyCard?.cardType === 'UNIT' || listStats.keyCard?.cardType === 'EVOLUTION') && (
+                    <div className="text-[10px] font-mono font-bold text-cyan-400 mt-1">
                       ATK {listStats.keyCard.atk} / DEF {listStats.keyCard.def}
                     </div>
                   )}
                 </div>
 
-                <div className="text-lg font-black text-white mb-2">{currentSelectedDeck.name}</div>
+                <div className="text-sm font-black text-white truncate">{currentSelectedDeck.name}</div>
 
                 {/* 系統別枚数 */}
-                <div className="flex items-center justify-between px-3 py-2 bg-slate-950/80 rounded-lg border border-slate-800 mb-3 text-xs font-mono">
+                <div className="flex items-center justify-between px-2 py-1 bg-slate-950/80 rounded border border-slate-800 text-[10px] font-mono">
                   <span className="text-amber-400">光 {listStats.elementCounts.Light}</span>
                   <span className="text-cyan-400">水 {listStats.elementCounts.Water}</span>
                   <span className="text-purple-400">闇 {listStats.elementCounts.Dark}</span>
@@ -433,75 +347,58 @@ export const DeckManager: React.FC<{ onBackToBattle: (deck: UserDeck) => void }>
                   <span className="text-slate-400">無 {listStats.elementCounts.Neutral}</span>
                 </div>
 
-                {/* マナカーブ（棒グラフを確実に描画！） */}
-                <div className="bg-slate-950/90 p-3.5 rounded-xl border border-slate-800 mb-3">
-                  <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold mb-2">
+                {/* マナカーブ棒グラフ */}
+                <div className="bg-slate-950/90 p-2 rounded-lg border border-slate-800">
+                  <div className="flex justify-between text-[9px] text-slate-400 font-bold mb-1">
                     <span>マナカーブ</span>
                     <span className="text-amber-400">ルーン: {listStats.runeCount}枚</span>
                   </div>
-
-                  <div className="flex items-end justify-between h-20 px-2 bg-[#060e20] rounded-lg border border-slate-800/80 pt-2">
+                  <div className="flex items-end justify-between h-14 px-1.5 bg-[#050b18] rounded border border-slate-800/80 pt-1">
                     {[1, 2, 3, 4, 5, 6, 7, 8].map((cost, i) => {
                       const count = listStats.costCurve[i];
-                      const maxVal = Math.max(...listStats.costCurve, 10);
-                      const heightPercent = Math.min(100, Math.max(6, (count / maxVal) * 100));
-
+                      const heightPercent = Math.min(100, Math.max(8, (count / 14) * 100));
                       return (
-                        <div key={cost} className="flex flex-col items-center justify-end h-full w-6">
-                          <span className="text-[10px] font-mono font-bold text-amber-300 mb-1">{count > 0 ? count : ''}</span>
+                        <div key={cost} className="flex flex-col items-center justify-end h-full w-5">
+                          <span className="text-[8px] font-mono font-bold text-amber-300 mb-0.5">{count > 0 ? count : ''}</span>
                           <div
-                            style={{ height: `${count === 0 ? 3 : heightPercent}%` }}
-                            className={`w-3.5 rounded-t-sm transition-all ${count > 0 ? 'bg-gradient-to-t from-orange-600 to-amber-400 shadow-[0_0_6px_rgba(245,158,11,0.6)]' : 'bg-slate-800'}`}
+                            style={{ height: `${count === 0 ? 2 : heightPercent}%` }}
+                            className={`w-3 rounded-t-xs ${count > 0 ? 'bg-gradient-to-t from-orange-600 to-amber-400 shadow-[0_0_6px_rgba(245,158,11,0.5)]' : 'bg-slate-800'}`}
                           />
-                          <span className="text-[9px] text-slate-400 font-mono mt-1">{cost === 8 ? '8~' : cost}</span>
+                          <span className="text-[8px] text-slate-400 font-mono mt-0.5">{cost === 8 ? '8~' : cost}</span>
                         </div>
                       );
                     })}
-
-                    {/* ルーン専用バー */}
-                    <div className="flex flex-col items-center justify-end h-full w-6 border-l border-slate-700/60 pl-1">
-                      <span className="text-[10px] font-mono font-bold text-yellow-300 mb-1">{listStats.runeCount || ''}</span>
+                    <div className="flex flex-col items-center justify-end h-full w-5 border-l border-slate-700/60 pl-1">
+                      <span className="text-[8px] font-mono font-bold text-yellow-300 mb-0.5">{listStats.runeCount || ''}</span>
                       <div
-                        style={{ height: `${Math.min(100, Math.max(6, (listStats.runeCount / 10) * 100))}%` }}
-                        className="w-3.5 bg-gradient-to-t from-yellow-600 to-yellow-300 rounded-t-sm shadow-[0_0_6px_rgba(234,179,8,0.5)]"
+                        style={{ height: `${Math.min(100, Math.max(8, (listStats.runeCount / 14) * 100))}%` }}
+                        className="w-3 bg-gradient-to-t from-yellow-600 to-yellow-300 rounded-t-xs shadow-[0_0_6px_rgba(234,179,8,0.5)]"
                       />
-                      <span className="text-[9px] text-yellow-400 font-bold mt-1">⚡</span>
+                      <span className="text-[8px] text-yellow-400 font-bold mt-0.5">⚡</span>
                     </div>
                   </div>
                 </div>
 
-                {/* 種別内訳（ユニット・スペル・ルーン・ドメイン） */}
-                <div className="grid grid-cols-2 gap-2 text-xs bg-slate-950/70 p-2.5 rounded-lg border border-slate-800 mb-4 font-medium">
-                  <div className="flex justify-between text-slate-300">
-                    <span>ユニット:</span>
-                    <span className="font-bold text-white">{listStats.unitCount}枚</span>
-                  </div>
-                  <div className="flex justify-between text-slate-300">
-                    <span>スペル:</span>
-                    <span className="font-bold text-white">{listStats.spellCount}枚</span>
-                  </div>
-                  <div className="flex justify-between text-slate-300">
-                    <span>ルーン:</span>
-                    <span className="font-bold text-white">{listStats.runeCount}枚</span>
-                  </div>
-                  <div className="flex justify-between text-slate-300">
-                    <span>ドメイン:</span>
-                    <span className="font-bold text-white">{listStats.domainCount}枚</span>
-                  </div>
+                {/* 内訳 */}
+                <div className="grid grid-cols-4 gap-1 text-[10px] bg-slate-950/70 p-1.5 rounded border border-slate-800 text-center font-medium">
+                  <div>ユ: <span className="text-white font-bold">{listStats.unitCount}</span></div>
+                  <div>ス: <span className="text-white font-bold">{listStats.spellCount}</span></div>
+                  <div>ル: <span className="text-white font-bold">{listStats.runeCount}</span></div>
+                  <div>ド: <span className="text-white font-bold">{listStats.domainCount}</span></div>
                 </div>
               </div>
 
-              {/* 下部アクションボタン群 */}
-              <div className="flex gap-2.5 pt-3 border-t border-cyan-900/50">
+              {/* 下部ボタン群 */}
+              <div className="flex gap-2 pt-2 border-t border-cyan-900/50 mt-1">
                 <button
                   onClick={() => handleDeleteDeck(currentSelectedDeck.id)}
-                  className="px-3.5 py-2.5 bg-red-950/80 hover:bg-red-900 text-red-300 border border-red-700/50 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                  className="px-2.5 py-1.5 bg-red-950/80 hover:bg-red-900 text-red-300 border border-red-700/50 rounded-lg text-xs font-bold cursor-pointer transition-all"
                 >
-                  デッキ削除
+                  削除
                 </button>
                 <button
                   onClick={handleStartEdit}
-                  className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-700/60 rounded-xl text-sm font-bold transition-all cursor-pointer text-center"
+                  className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-700/60 rounded-lg text-xs font-bold text-center cursor-pointer transition-all"
                 >
                   デッキ編成
                 </button>
@@ -510,7 +407,7 @@ export const DeckManager: React.FC<{ onBackToBattle: (deck: UserDeck) => void }>
                     localStorage.setItem(ACTIVE_DECK_KEY, currentSelectedDeck.id);
                     onBackToBattle(currentSelectedDeck);
                   }}
-                  className="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white font-black rounded-xl shadow-[0_0_15px_rgba(6,182,212,0.4)] text-sm transition-all cursor-pointer text-center"
+                  className="flex-1 py-1.5 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white font-black rounded-lg shadow-md text-xs text-center cursor-pointer transition-all active:scale-95"
                 >
                   このデッキで対戦
                 </button>
@@ -521,147 +418,155 @@ export const DeckManager: React.FC<{ onBackToBattle: (deck: UserDeck) => void }>
       )}
 
       {/* ================================================================= */}
-      {/* 画面2：【デッキ編成画面（デュエプレ風・公式用語版）】 */}
+      {/* 画面2：デッキ編成画面（レイアウト崩れ完全修正版） */}
       {/* ================================================================= */}
       {viewMode === 'EDIT' && editingDeck && (
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col h-full overflow-hidden">
           {/* 最上部ステータスバー */}
-          <div className="h-16 px-4 bg-[#0a1530] border-b border-cyan-800/40 flex items-center justify-between gap-4">
-            <button
-              onClick={() => setViewMode('LIST')}
-              className="px-4 py-1.5 bg-red-700 hover:bg-red-600 text-white font-bold rounded-lg text-sm shrink-0 shadow cursor-pointer transition-all"
-            >
-              戻る
-            </button>
-
-            {/* 検索入力 */}
-            <input
-              type="text"
-              placeholder="カード名・テキストで検索..."
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-              className="bg-slate-900/90 border border-cyan-700/50 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-400 w-56 placeholder-slate-500"
-            />
-
-            {/* 種別内訳 */}
-            <div className="flex items-center gap-4 text-xs text-slate-300 font-medium bg-slate-900/80 px-3 py-1.5 rounded-lg border border-slate-800">
-              <span>ユニット: <strong className="text-white font-mono">{editStats.unitCount}</strong>枚</span>
-              <span>スペル: <strong className="text-white font-mono">{editStats.spellCount}</strong>枚</span>
-              <span>ルーン: <strong className="text-white font-mono">{editStats.runeCount}</strong>枚</span>
-              <span>ドメイン: <strong className="text-white font-mono">{editStats.domainCount}</strong>枚</span>
+          <div className="h-11 px-3 bg-[#081226] border-b border-cyan-800/40 flex items-center justify-between gap-3 shrink-0">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setViewMode('LIST')}
+                className="px-3 py-1 bg-red-700 hover:bg-red-600 text-white font-bold rounded-lg text-xs shrink-0 shadow cursor-pointer transition-all"
+              >
+                戻る
+              </button>
+              <input
+                type="text"
+                placeholder="カード名・テキストで検索..."
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                className="bg-slate-900/90 border border-cyan-700/50 rounded-lg px-2.5 py-0.5 text-xs text-white focus:outline-none focus:border-cyan-400 w-44"
+              />
             </div>
 
-            {/* デッキ名 ＆ 枚数カウンター */}
-            <div className="text-right shrink-0">
+            {/* 種別内訳 */}
+            <div className="flex items-center gap-3 text-[11px] text-slate-300 font-medium">
+              <span>ユニット: <b className="text-white">{editStats.unitCount}</b></span>
+              <span>スペル: <b className="text-white">{editStats.spellCount}</b></span>
+              <span>ルーン: <b className="text-white">{editStats.runeCount}</b></span>
+              <span>ドメイン: <b className="text-white">{editStats.domainCount}</b></span>
+            </div>
+
+            {/* デッキ名 ＆ カウンター */}
+            <div className="flex items-center gap-3 shrink-0">
               <input
                 type="text"
                 value={editingDeck.name}
                 onChange={(e) => setEditingDeck({ ...editingDeck, name: e.target.value })}
-                className="bg-transparent text-right font-black text-sm text-cyan-300 border-b border-transparent hover:border-cyan-500 focus:border-cyan-400 focus:outline-none"
+                className="bg-transparent text-right font-black text-xs text-cyan-300 border-b border-transparent hover:border-cyan-500 focus:border-cyan-400 focus:outline-none w-36 truncate"
               />
-              <div className={`text-xs font-mono font-bold ${editStats.totalCount === 40 ? 'text-emerald-400' : 'text-amber-400'}`}>
+              <span className={`text-xs font-mono font-bold ${editStats.totalCount === 40 ? 'text-emerald-400' : 'text-amber-400'}`}>
                 {editStats.totalCount} / 40枚
-              </div>
+              </span>
             </div>
           </div>
 
           {/* メイン編集エリア */}
           <div className="flex-1 flex overflow-hidden">
-            {/* 左端：縦並び系統切り替えタブ（公式6系統） */}
-            <div className="w-16 bg-[#060e22] border-r border-cyan-900/40 flex flex-col items-center py-3 gap-2 shrink-0">
+            {/* 左端：属性切り替え縦タブ（コンパクト化・高さ均等） */}
+            <div className="w-12 bg-[#050b1a] border-r border-cyan-900/40 flex flex-col justify-between py-1.5 px-1 shrink-0">
               {[
-                { id: 'ALL', label: 'ALL', color: 'bg-slate-700 text-white' },
+                { id: 'ALL', label: 'ALL', color: 'bg-slate-700' },
                 { id: 'Light', label: '光', color: 'bg-amber-400 text-black' },
                 { id: 'Water', label: '水', color: 'bg-cyan-500 text-black' },
-                { id: 'Dark', label: '闇', color: 'bg-purple-600 text-white' },
-                { id: 'Fire', label: '火', color: 'bg-red-600 text-white' },
-                { id: 'Earth', label: '地', color: 'bg-emerald-600 text-white' },
-                { id: 'Neutral', label: '無', color: 'bg-slate-500 text-white' },
+                { id: 'Dark', label: '闇', color: 'bg-purple-600' },
+                { id: 'Fire', label: '火', color: 'bg-red-600' },
+                { id: 'Earth', label: '地', color: 'bg-emerald-600' },
+                { id: 'Neutral', label: '無', color: 'bg-slate-500' },
               ].map(tab => (
                 <button
                   key={tab.id}
                   onClick={() => setSelectedElement(tab.id)}
-                  className={`w-11 h-11 rounded-lg flex items-center justify-center font-black text-xs transition-all cursor-pointer ${selectedElement === tab.id ? `${tab.color} scale-110 shadow-[0_0_12px_rgba(255,255,255,0.4)]` : 'bg-slate-900/80 text-slate-400 hover:text-white border border-slate-800'}`}
+                  className={`h-8 rounded-md flex items-center justify-center font-black text-xs transition-all cursor-pointer ${selectedElement === tab.id ? `${tab.color} scale-105 shadow-md` : 'bg-slate-900/80 text-slate-400 hover:text-white border border-slate-800'}`}
                 >
                   {tab.label}
                 </button>
               ))}
             </div>
 
-            {/* 中央：カード一覧（公式用語フィルタバー付き） */}
-            <div className="flex-1 flex flex-col bg-[#08122a] border-r border-cyan-900/40">
-              <div className="h-10 bg-gradient-to-r from-orange-600 to-amber-600 px-4 flex items-center justify-between text-xs font-black shadow">
-                <div className="flex items-center gap-3">
-                  <span>カード一覧 ({filteredPool.length}枚)</span>
-                  {/* 公式種別フィルタ（無駄な補足を完全撤廃） */}
-                  <div className="flex gap-1">
-                    {[
-                      { id: 'ALL', label: 'すべて' },
-                      { id: 'UNIT', label: 'ユニット' },
-                      { id: 'EVOLUTION', label: '進化ユニット' },
-                      { id: 'SPELL', label: 'スペル' },
-                      { id: 'RUNE', label: 'ルーン' },
-                      { id: 'DOMAIN', label: 'ドメイン' },
-                    ].map(f => (
-                      <button
-                        key={f.id}
-                        onClick={() => setSelectedTypeFilter(f.id)}
-                        className={`px-2.5 py-0.5 rounded text-[11px] font-bold cursor-pointer transition-colors ${selectedTypeFilter === f.id ? 'bg-black text-amber-300 shadow' : 'bg-black/30 text-white/80 hover:bg-black/50'}`}
-                      >
-                        {f.label}
-                      </button>
-                    ))}
-                  </div>
+            {/* 中央：カード一覧（オレンジヘッダー・ドロップダウン形式） */}
+            <div className="flex-1 flex flex-col bg-[#071024] border-r border-cyan-900/40 overflow-hidden">
+              <div className="h-8 bg-gradient-to-r from-orange-600 to-amber-600 px-3 flex items-center justify-between text-xs font-black shadow shrink-0 relative">
+                <span>カード一覧 ({filteredPool.length}枚)</span>
+
+                {/* すべて ▾ ドロップダウンボタン（ボタン乱立を完全解消！） */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowTypeDropdown(!showTypeDropdown)}
+                    className="px-2.5 py-0.5 bg-black/40 hover:bg-black/60 text-amber-200 border border-amber-400/40 rounded text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    <span>{typeFilterLabels[selectedTypeFilter]}</span>
+                    <span className="text-[10px]">▼</span>
+                  </button>
+
+                  {showTypeDropdown && (
+                    <div className="absolute right-0 top-full mt-1 w-32 bg-[#09152e] border border-cyan-500/70 rounded-lg shadow-2xl z-50 overflow-hidden">
+                      {Object.entries(typeFilterLabels).map(([key, label]) => (
+                        <div
+                          key={key}
+                          onClick={() => {
+                            setSelectedTypeFilter(key);
+                            setShowTypeDropdown(false);
+                          }}
+                          className={`px-3 py-1.5 text-xs font-bold cursor-pointer hover:bg-cyan-950 transition-colors ${selectedTypeFilter === key ? 'text-amber-400 bg-cyan-900/30' : 'text-slate-200'}`}
+                        >
+                          {label}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <button
-                  onClick={() => setShowSuggestModal(true)}
-                  className="px-3 py-1 bg-blue-900/90 hover:bg-blue-800 text-cyan-200 border border-cyan-400/50 rounded-lg text-xs font-bold cursor-pointer shadow transition-all active:scale-95"
-                >
-                  オススメ候補
-                </button>
               </div>
 
-              {/* カードグリッド */}
-              <div className="flex-1 p-3 overflow-y-auto grid grid-cols-4 gap-3 content-start custom-scrollbar">
+              {/* カード一覧グリッド */}
+              <div className="flex-1 p-2 overflow-y-auto grid grid-cols-4 gap-2 content-start custom-scrollbar">
                 {filteredPool.map(card => {
                   const inDeckCount = editingDeck.cards.find(c => c.cardId === card.id)?.count || 0;
-                  const cType = getCardType(card);
-                  const cSys = getCardSystem(card);
-
                   return (
                     <div
                       key={card.id}
                       onClick={() => handleAddCardToEdit(card)}
                       onContextMenu={(e) => { e.preventDefault(); setPreviewCard(card as Card); }}
-                      className={`h-36 rounded-xl border p-2.5 flex flex-col justify-between cursor-pointer select-none transition-all ${inDeckCount >= 4 ? 'bg-slate-950/40 border-slate-800 opacity-50' : 'bg-[#0e1c3d] hover:bg-[#132654] border-cyan-800/60 hover:border-cyan-400 shadow-md'}`}
+                      className={`h-28 rounded-lg border p-1.5 flex flex-col justify-between cursor-pointer select-none transition-all ${inDeckCount >= 4 ? 'bg-slate-950/40 border-slate-800 opacity-50' : 'bg-[#0a1633] hover:bg-[#0f214a] border-cyan-800/60 hover:border-cyan-400 shadow-sm'}`}
                     >
                       <div className="flex justify-between items-center">
-                        <span className="w-6 h-6 rounded-full bg-amber-500 text-black font-black text-xs flex items-center justify-center shadow">
+                        <span className="w-5 h-5 rounded-full bg-amber-500 text-black font-black text-xs flex items-center justify-center shadow">
                           {card.cost}
                         </span>
-                        <span className="text-xs font-mono font-black text-cyan-400 bg-slate-900 px-1.5 py-0.5 rounded border border-cyan-900/60">
+                        <span className="text-[10px] font-mono font-bold text-cyan-400 bg-slate-900 px-1 py-0.2 rounded border border-cyan-900/60">
                           x{inDeckCount}
                         </span>
                       </div>
                       <div className="font-bold text-xs text-white truncate">{card.name}</div>
-                      <div className="text-[10px] text-cyan-400/80 truncate">
-                        {formatSystemJapanese(cSys)}系統 • {formatCardTypeJapanese(cType)}
+                      <div className="text-[9px] text-cyan-400/80 truncate">
+                        {card.element || '無'}系統 • {card.cardType === 'EVOLUTION' ? '進化' : card.cardType}
                       </div>
-                      <div className="text-[10px] text-slate-400 truncate">{card.effectText || '通常'}</div>
+                      <div className="text-[9px] text-slate-400 truncate">{card.effectText || '通常'}</div>
                     </div>
                   );
                 })}
               </div>
             </div>
 
-            {/* 右側：マイデッキリスト（キーカード指定機能付き） */}
-            <div className="w-[400px] bg-[#071129] flex flex-col">
-              <div className="h-10 bg-gradient-to-r from-blue-700 to-cyan-600 px-4 flex items-center justify-between text-xs font-black shadow">
-                <span>マイデッキ</span>
-                <span className="font-mono">{editStats.totalCount} / 40</span>
+            {/* 右側：マイデッキ（右上に「オススメ」ボタン配置！） */}
+            <div className="w-[320px] bg-[#060e20] flex flex-col shrink-0 overflow-hidden">
+              <div className="h-8 bg-gradient-to-r from-blue-700 to-cyan-600 px-3 flex items-center justify-between text-xs font-black shadow shrink-0">
+                <div className="flex items-center gap-2">
+                  <span>マイデッキ</span>
+                  <span className="text-cyan-200 font-mono font-normal">({editStats.totalCount}/40)</span>
+                </div>
+                {/* デュエプレ同位置の「オススメ」ボタン！ */}
+                <button
+                  onClick={() => setShowSuggestModal(true)}
+                  className="px-2 py-0.5 bg-blue-950/90 hover:bg-blue-900 text-amber-300 border border-amber-400/50 rounded text-[11px] font-bold shadow transition-all cursor-pointer active:scale-95"
+                >
+                  オススメ
+                </button>
               </div>
 
-              <div className="flex-1 p-3 overflow-y-auto space-y-1.5 custom-scrollbar">
+              {/* マイデッキリスト */}
+              <div className="flex-1 p-2 overflow-y-auto space-y-1 custom-scrollbar">
                 {editingDeck.cards.map(entry => {
                   const card = CARDS.find(c => c.id === entry.cardId);
                   if (!card) return null;
@@ -670,13 +575,13 @@ export const DeckManager: React.FC<{ onBackToBattle: (deck: UserDeck) => void }>
                   return (
                     <div
                       key={card.id}
-                      className={`h-11 rounded-lg bg-[#0d1f42] border flex items-center justify-between px-3 transition-all ${isKey ? 'border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.3)]' : 'border-cyan-800/50 hover:border-cyan-500'}`}
+                      className={`h-9 rounded-md bg-[#0a1736] border flex items-center justify-between px-2 transition-all ${isKey ? 'border-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.3)]' : 'border-cyan-800/50 hover:border-cyan-500'}`}
                     >
                       <div
                         onClick={() => handleRemoveCardFromEdit(card.id)}
-                        className="flex items-center gap-2 overflow-hidden flex-1 cursor-pointer group"
+                        className="flex items-center gap-1.5 overflow-hidden flex-1 cursor-pointer group"
                       >
-                        <span className="w-5 h-5 rounded-full bg-amber-500 text-black font-black text-[11px] flex items-center justify-center shrink-0">
+                        <span className="w-4 h-4 rounded-full bg-amber-500 text-black font-black text-[10px] flex items-center justify-center shrink-0">
                           {card.cost}
                         </span>
                         <span className="text-xs font-bold text-slate-200 truncate group-hover:text-red-300">
@@ -684,16 +589,15 @@ export const DeckManager: React.FC<{ onBackToBattle: (deck: UserDeck) => void }>
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-2 shrink-0">
-                        {/* キーカード指定ボタン */}
+                      <div className="flex items-center gap-1.5 shrink-0">
                         <button
                           onClick={() => handleSetKeyCard(card.id)}
-                          className={`text-xs px-2 py-0.5 rounded font-bold cursor-pointer transition-all ${isKey ? 'bg-amber-400 text-black shadow-[0_0_8px_rgba(251,191,36,0.5)]' : 'bg-slate-800 text-slate-400 hover:text-amber-300'}`}
-                          title="このカードをキーカードに設定"
+                          className={`text-[10px] px-1 py-0.2 rounded font-bold cursor-pointer transition-colors ${isKey ? 'bg-amber-400 text-black shadow-sm' : 'bg-slate-800 text-slate-400 hover:text-amber-300'}`}
+                          title="キーカードに設定"
                         >
-                          ★ {isKey ? '看板' : '設定'}
+                          ★
                         </button>
-                        <span className="text-xs font-mono font-black text-cyan-300 bg-slate-900 px-2 py-0.5 rounded border border-cyan-900/60">
+                        <span className="text-xs font-mono font-black text-cyan-300 bg-slate-900 px-1.5 py-0.2 rounded border border-cyan-900/60">
                           {entry.count}
                         </span>
                       </div>
@@ -702,12 +606,12 @@ export const DeckManager: React.FC<{ onBackToBattle: (deck: UserDeck) => void }>
                 })}
               </div>
 
-              {/* デッキ保存ボタン */}
-              <div className="p-3 border-t border-cyan-900/40">
+              {/* 保存ボタン */}
+              <div className="p-2 border-t border-cyan-900/40 shrink-0">
                 <button
                   onClick={handleSaveDeck}
                   disabled={editStats.totalCount !== 40}
-                  className={`w-full py-3 rounded-xl font-black text-sm shadow-lg transition-all ${editStats.totalCount === 40 ? 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white cursor-pointer shadow-[0_0_20px_rgba(6,182,212,0.5)] active:scale-98' : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'}`}
+                  className={`w-full py-2 rounded-lg font-black text-xs shadow transition-all ${editStats.totalCount === 40 ? 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white cursor-pointer shadow-[0_0_15px_rgba(6,182,212,0.5)] active:scale-98' : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'}`}
                 >
                   {editStats.totalCount === 40 ? 'デッキ保存' : `40枚必要です (${editStats.totalCount}/40)`}
                 </button>
@@ -715,40 +619,37 @@ export const DeckManager: React.FC<{ onBackToBattle: (deck: UserDeck) => void }>
             </div>
           </div>
 
-          {/* オススメカード候補モーダル（勝手に追加せず候補を提示） */}
+          {/* オススメカード候補モーダル */}
           {showSuggestModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-              <div className="bg-[#0b1736] border-2 border-cyan-400/80 rounded-2xl p-6 max-w-2xl w-full shadow-2xl">
-                <div className="flex justify-between items-center pb-3 border-b border-cyan-800/60 mb-4">
-                  <h3 className="text-base font-black text-cyan-200">オススメ候補カード一覧</h3>
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+              <div className="bg-[#09152e] border-2 border-cyan-400/80 rounded-xl p-4 max-w-lg w-full shadow-2xl">
+                <div className="flex justify-between items-center pb-2 border-b border-cyan-800/60 mb-3">
+                  <h3 className="text-sm font-black text-cyan-200">オススメ候補カード</h3>
                   <button
                     onClick={() => setShowSuggestModal(false)}
-                    className="w-7 h-7 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer"
+                    className="w-6 h-6 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center text-xs cursor-pointer"
                   >
                     ✕
                   </button>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-h-80 overflow-y-auto custom-scrollbar p-1">
-                  {suggestedCards.map(card => {
-                    const cType = getCardType(card);
-                    return (
-                      <div
-                        key={card.id}
-                        onClick={() => {
-                          handleAddCardToEdit(card);
-                          setShowSuggestModal(false);
-                        }}
-                        className="p-2.5 rounded-xl bg-slate-900 hover:bg-cyan-950/60 border border-cyan-700/50 hover:border-cyan-400 cursor-pointer transition-all"
-                      >
-                        <div className="flex justify-between text-xs font-bold text-amber-400 mb-1">
-                          <span>コスト {card.cost}</span>
-                          <span>{formatCardTypeJapanese(cType)}</span>
-                        </div>
-                        <div className="font-black text-xs text-white truncate">{card.name}</div>
-                        <div className="text-[10px] text-slate-400 truncate mt-1">{card.effectText || '通常'}</div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 max-h-60 overflow-y-auto custom-scrollbar p-1">
+                  {suggestedCards.map(card => (
+                    <div
+                      key={card.id}
+                      onClick={() => {
+                        handleAddCardToEdit(card);
+                        setShowSuggestModal(false);
+                      }}
+                      className="p-2 rounded-lg bg-slate-900 hover:bg-cyan-950 border border-cyan-700/50 hover:border-cyan-400 cursor-pointer transition-all"
+                    >
+                      <div className="flex justify-between text-[10px] font-bold text-amber-400 mb-0.5">
+                        <span>コスト {card.cost}</span>
+                        <span>{card.cardType === 'EVOLUTION' ? '進化' : card.cardType}</span>
                       </div>
-                    );
-                  })}
+                      <div className="font-bold text-xs text-white truncate">{card.name}</div>
+                      <div className="text-[9px] text-slate-400 truncate mt-0.5">{card.effectText || '通常'}</div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
