@@ -14,7 +14,7 @@ import { calculateUnitStats, canPlayCard } from '../engine/engineUtils';
 import { canUnitGuard, isValidAttackTarget } from '../engine/combatEngine';
 import { getValidSpellTargets } from '../engine/spellSystem';
 import { ScriptiaAIEngine, toBoardUnit, getAIPlayableCards, getAIPlayAction } from '../engine/aiEngine';
-import { History, X, Shield, Sparkles, Sword, Zap, Palette, User, Menu, BookOpen, Volume2, VolumeX } from 'lucide-react';
+import { History, X, Shield, Sparkles, Sword, Zap, Palette, User, Menu, BookOpen, Volume2, VolumeX, Layers } from 'lucide-react';
 import { soundManager } from '../utils/soundManager';
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -23,9 +23,10 @@ interface Props {
   state: GameState;
   dispatch: React.Dispatch<GameAction>;
   onInspect: (card: any) => void;
+  onOpenDeckBuilder?: () => void;
 }
 
-export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
+export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenDeckBuilder }) => {
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [arcanaMode, setArcanaMode] = useState(false);
   const [showLog, setShowLog] = useState(false);
@@ -1433,6 +1434,19 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
           >
             <Menu size={15} />
           </button>
+          {onOpenDeckBuilder && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenDeckBuilder();
+              }}
+              className="w-7 h-7 rounded-lg bg-black/70 hover:bg-black/90 border border-cyan-500/40 hover:border-cyan-400 flex items-center justify-center text-cyan-300 hover:text-white transition-all shadow-md active:scale-95 cursor-pointer backdrop-blur-sm"
+              title="デッキ編成画面を開く"
+            >
+              <Layers size={14} />
+            </button>
+          )}
           <button
             type="button"
             onClick={(e) => {
@@ -2328,6 +2342,24 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
                 <span className="text-[10px] text-cyan-300 font-bold">{currentTheme.name}</span>
               </button>
 
+              {/* Action 3: Deck Builder */}
+              {onOpenDeckBuilder && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMenu(false);
+                    onOpenDeckBuilder();
+                  }}
+                  className="w-full py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-cyan-700/50 flex items-center justify-between text-xs font-bold text-cyan-300 hover:text-white transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center space-x-2">
+                    <Layers size={14} className="text-cyan-400" />
+                    <span>デッキ編成 (Deck Builder)</span>
+                  </div>
+                  <span className="text-[10px] text-cyan-400 font-bold">編集</span>
+                </button>
+              )}
+
               {/* Close Button */}
               <button
                 type="button"
@@ -2480,17 +2512,32 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect }) => {
                 {state.winner === 'player1' ? '対戦相手の結界を突破し、見事勝利しました！' : '自軍の結界がすべて破壊されました...'}
               </p>
               
-              {/* 確実に押せる「もう一度遊ぶ」ボタン */}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleRestartGame();
-                }}
-                className="w-full py-3.5 px-6 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold rounded-xl shadow-[0_0_25px_rgba(6,182,212,0.6)] active:scale-95 transition-all cursor-pointer relative z-[10001] text-sm tracking-wider"
-              >
-                もう一度遊ぶ
-              </button>
+              <div className="flex flex-col gap-2 relative z-[10001]">
+                {/* 確実に押せる「もう一度遊ぶ」ボタン */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRestartGame();
+                  }}
+                  className="w-full py-3.5 px-6 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold rounded-xl shadow-[0_0_25px_rgba(6,182,212,0.6)] active:scale-95 transition-all cursor-pointer text-sm tracking-wider"
+                >
+                  もう一度遊ぶ
+                </button>
+                {onOpenDeckBuilder && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenDeckBuilder();
+                    }}
+                    className="w-full py-2.5 px-4 bg-slate-900/90 hover:bg-slate-800 text-cyan-300 font-bold rounded-xl border border-cyan-700/60 shadow active:scale-95 transition-all cursor-pointer text-xs flex items-center justify-center gap-1.5"
+                  >
+                    <Layers size={14} />
+                    <span>デッキ編成へ</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}

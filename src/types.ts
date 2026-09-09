@@ -119,7 +119,7 @@ export interface GameState {
 }
 
 export type GameAction = 
-  | { type: 'START_GAME' }
+  | { type: 'START_GAME'; p1CardIds?: string[]; p2CardIds?: string[] }
   | { type: 'NEXT_PHASE' }
   | { type: 'PLACE_ARCANA'; instanceId: string }
   | { type: 'PLAY_CARD'; instanceId: string; targetId?: string; evolutionTargetId?: string }

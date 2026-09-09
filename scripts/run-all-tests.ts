@@ -2,6 +2,7 @@ import { createInitialState, gameReducer } from '../src/engine/gameEngine';
 import { canPlayCard, calculateUnitStats } from '../src/engine/engineUtils';
 import { isValidAttackTarget, canUnitGuard } from '../src/engine/combatEngine';
 import { getCard } from '../src/data/cards';
+import { STARTER_DECK_FIRE, STARTER_DECK_CONTROL } from '../src/components/DeckBuilder';
 
 console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 console.log('【TCG SCRIPTIA 必須テスト10選 自動実行】');
@@ -486,6 +487,42 @@ import { ScriptiaAIEngine, toBoardUnit } from '../src/engine/aiEngine';
   assert(
     attacks.length === 1 && attacks[0].targetUnit?.instanceId === 'op-small',
     'テスト19: 攻撃手順最適化（40DEFへの自爆を回避し、20DEFの弱小敵への無傷有利トレードをピンポイント選択）'
+  );
+}
+
+// Test 20: デッキ構築ルール検証（ちょうど40枚、同名カード上限4枚、全カード存在確認）
+{
+  const fireCount = STARTER_DECK_FIRE.cards.reduce((sum, c) => sum + c.count, 0);
+  const controlCount = STARTER_DECK_CONTROL.cards.reduce((sum, c) => sum + c.count, 0);
+  const fireMaxCopies = Math.max(...STARTER_DECK_FIRE.cards.map(c => c.count));
+  const controlMaxCopies = Math.max(...STARTER_DECK_CONTROL.cards.map(c => c.count));
+  const allCardsExist = [...STARTER_DECK_FIRE.cards, ...STARTER_DECK_CONTROL.cards].every(
+    c => getCard(c.cardId) !== undefined
+  );
+
+  assert(
+    fireCount === 40 && controlCount === 40 && fireMaxCopies <= 4 && controlMaxCopies <= 4 && allCardsExist,
+    'テスト20: デッキ構築ルール検証（ちょうど40枚・同名4枚上限・カードプール整合性）'
+  );
+}
+
+// Test 21: カスタムデッキ初期化検証（40枚カードIDから生成されたデッキでゲームが開始されること）
+{
+  const customIds: string[] = [];
+  STARTER_DECK_FIRE.cards.forEach(entry => {
+    for (let i = 0; i < entry.count; i++) {
+      customIds.push(entry.cardId);
+    }
+  });
+
+  const state = createInitialState(customIds);
+  const totalP1Cards = state.player1.deck.length + state.player1.hand.length;
+  const isCustomP1 = state.player1.hand.every(c => customIds.includes(c.cardId)) &&
+                     state.player1.deck.every(c => customIds.includes(c.cardId));
+
+  assert(
+    totalP1Cards === 40 && isCustomP1,
+    'テスト21: カスタムデッキ初期化検証（40枚の指定カード群からデッキと初期手札が正しく生成されること）'
   );
 }
 

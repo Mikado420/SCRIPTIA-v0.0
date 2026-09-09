@@ -32,9 +32,14 @@ const generateDeck = (system: System): CardInstance[] => {
   return deck.sort(() => Math.random() - 0.5);
 };
 
-export const createInitialState = (): GameState => {
-  const p1Deck = generateDeck('Fire');
-  const p2Deck = generateDeck('Water');
+export const buildDeckFromIds = (cardIds: string[]): CardInstance[] => {
+  const deck: CardInstance[] = cardIds.map(id => createInstance(id));
+  return deck.sort(() => Math.random() - 0.5);
+};
+
+export const createInitialState = (p1CardIds?: string[], p2CardIds?: string[]): GameState => {
+  const p1Deck = p1CardIds && p1CardIds.length === 40 ? buildDeckFromIds(p1CardIds) : generateDeck('Fire');
+  const p2Deck = p2CardIds && p2CardIds.length === 40 ? buildDeckFromIds(p2CardIds) : generateDeck('Water');
 
   return {
     player1: {
@@ -77,7 +82,7 @@ export const createInitialState = (): GameState => {
 
 export const gameReducer = (state: GameState, action: GameAction): GameState => {
   if (action.type === 'START_GAME') {
-    return createInitialState();
+    return createInitialState(action.p1CardIds, action.p2CardIds);
   }
 
   if (state.winner) return state;
