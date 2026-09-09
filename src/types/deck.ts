@@ -6,7 +6,8 @@ export interface DeckCardEntry {
 export interface UserDeck {
   id: string;
   name: string;
+  keyCardId?: string;
   cards: DeckCardEntry[]; // cardIdと枚数のペア
-  createdAt: number;
-  updatedAt: number;
+  createdAt?: number;
+  updatedAt?: number;
 }

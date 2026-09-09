@@ -1,7 +1,8 @@
 import React, { useState, useReducer, useEffect, useCallback } from 'react';
 import { GameBoard } from './components/GameBoard';
 import { LandscapeContainer } from './components/LandscapeContainer';
-import { DeckBuilder, STARTER_DECK_FIRE, STORAGE_KEY, ACTIVE_DECK_KEY } from './components/DeckBuilder';
+import { DeckManager } from './components/DeckManager';
+import { STARTER_DECK_FIRE, STORAGE_KEY, ACTIVE_DECK_KEY } from './components/DeckManager';
 import { gameReducer, createInitialState } from './engine/gameEngine';
 import { UserDeck } from './types/deck';
 
@@ -82,7 +83,7 @@ function App() {
           onOpenDeckBuilder={() => setCurrentView('DECK_BUILDER')}
         />
       ) : (
-        <DeckBuilder
+        <DeckManager
           onBackToBattle={handleStartBattle}
         />
       )}
