@@ -2,6 +2,7 @@ import { GameState, Card, BoardUnit, PlayerState, GameAction, UnitState, CardIns
 import { getCard } from '../data/cards';
 import { calculateUnitStats } from './engineUtils';
 import { canUnitGuard } from './combatEngine';
+import { getValidSpellTargets } from './spellSystem';
 
 export interface CardPlayAction {
   card: Card;
@@ -278,7 +279,7 @@ export class ScriptiaAIEngine {
       const virtualMana = virtualArcana.length;
 
       // 手札からコストと系統を満たすプレイ組み合わせを探索（深さ優先）
-      const playableCombos = this.findPlayableCombinations(virtualHand, virtualMana, virtualArcana, aiField);
+      const playableCombos = this.findPlayableCombinations(state, virtualHand, virtualMana, virtualArcana, aiField);
 
       for (const combo of playableCombos) {
         let planScore = 0;
@@ -318,10 +319,81 @@ export class ScriptiaAIEngine {
         const remainingHandCount = virtualHand.length - combo.length;
         planScore += (remainingHandCount * 20);
 
-        // 4. 攻撃シミュレーションスコア
-        const simulatedAttacks = this.evaluateAttacks(aiField, playerField, player.barrier, player.runes.length);
+        // 4. 攻撃シミュレーションと先読み (Lookahead & Opponent Analysis)
+        
+        // ① 自分のプレイ行動後の仮想盤面を構築する
+        const virtualAiField = [...aiField];
+        const virtualPlayerField = [...playerField];
+        const oppBarrier = player.barrier;
+        const oppRunesCount = player.runes.length;
+        
+        // プレイカードによる仮想盤面変化の適用
+        for (const action of combo) {
+          const cType = action.card.cardType || action.card.type;
+          if (cType === 'UNIT' || cType === 'Unit' || cType === 'EVOLUTION' || cType === 'Evolution') {
+            virtualAiField.push({
+              instanceId: 'virtual_' + Math.random(),
+              cards: [],
+              isRested: false,
+              hasSummoningSickness: !(action.card.keywords?.includes('速攻' as any) || action.card.keywords?.includes('Rush' as any)),
+              modifiers: [],
+              card: action.card,
+              currentAtk: action.card.atk,
+              currentDef: action.card.def,
+              currentBrk: action.card.brk,
+            });
+          }
+          // 仮想除去
+          if (action.card.id === 'BR-08' || action.card.id === 'BR-12' || action.card.id === 'BD-11') {
+             const targets = virtualPlayerField.sort((a,b) => (a.currentDef ?? 0) - (b.currentDef ?? 0));
+             if (targets.length > 0 && (targets[0].currentDef ?? 0) <= 80) virtualPlayerField.shift();
+          }
+          // 仮想バウンス
+          if (action.card.id === 'BB-09' || action.card.id === 'BB-12') {
+             if (virtualPlayerField.length > 0) virtualPlayerField.shift();
+          }
+        }
+
+        // ② 自ターンの攻撃シミュレーション
+        const simulatedAttacks = this.evaluateAttacks(virtualAiField, virtualPlayerField, oppBarrier, oppRunesCount);
         const attackScore = simulatedAttacks.reduce((sum, att) => sum + att.score, 0);
         planScore += attackScore;
+
+        // ③ 返しの相手ターンの反撃シミュレーション (1手先読み)
+        // 自軍の攻撃したユニットをレスト状態にする
+        for (const att of simulatedAttacks) {
+           const vUnit = virtualAiField.find(u => u.instanceId === att.attacker.instanceId);
+           if (vUnit) vUnit.isRested = true;
+           if (att.targetType === 'UNIT' && att.targetUnit) {
+              const idx = virtualPlayerField.findIndex(u => u.instanceId === att.targetUnit!.instanceId);
+              if (idx !== -1) virtualPlayerField.splice(idx, 1);
+           }
+        }
+        
+        // 相手が反撃してくる場合の被害予測スコア（マイナス評価）
+        let counterAttackPenalty = 0;
+        for (const oppU of virtualPlayerField) {
+           const atk = oppU.currentAtk ?? oppU.card.atk ?? 0;
+           const vulnerable = virtualAiField.filter(u => u.isRested && (u.currentDef ?? u.card.def ?? 0) <= atk);
+           if (vulnerable.length > 0) {
+              vulnerable.sort((a, b) => this.evaluateUnit(b, true, 5) - this.evaluateUnit(a, true, 5));
+              counterAttackPenalty += this.evaluateUnit(vulnerable[0], true, 5) * 0.8;
+           } else {
+              counterAttackPenalty += (oppU.currentBrk ?? oppU.card.brk ?? 1) * 30;
+           }
+        }
+        planScore -= counterAttackPenalty;
+
+        // ④ 相手のデッキタイプに基づく戦略的重み付け（Opponent Analysis）
+        const isOppAggro = player.arcana.length <= 4 && virtualPlayerField.length >= 2;
+        if (isOppAggro) {
+           // 相手がアグロの場合、自軍の守護ユニット展開を高く評価
+           const guardCount = virtualAiField.filter(u => u.card.keywords?.includes('Guard' as any) || u.card.keywords?.includes('守護' as any)).length;
+           planScore += (guardCount * 40);
+        } else {
+           // 相手がコントロールの場合、手札温存とリソースを高く評価
+           planScore += (remainingHandCount * 15);
+        }
 
         if (planScore > bestPlan.totalScore) {
           bestPlan = {
@@ -340,6 +412,7 @@ export class ScriptiaAIEngine {
 
   // プレイ可能な組み合わせ探索ヘルパー
   public static findPlayableCombinations(
+    state: GameState,
     hand: Card[],
     availableMana: number,
     arcana: Card[],
@@ -348,7 +421,15 @@ export class ScriptiaAIEngine {
     const results: CardPlayAction[][] = [[]]; // 何もプレイしない選択肢も含む
 
     // プレイ可能な単体カード
-    const playableCards = hand.filter(c => c.cost <= availableMana && this.checkAffinity(c, arcana));
+    const playableCards = hand.filter(c => {
+      if (c.cost > availableMana) return false;
+      if (!this.checkAffinity(c, arcana)) return false;
+      if ((c.type === 'Spell' || c.cardType === 'SPELL') && c.targetReq && c.instanceId) {
+        const validTargets = getValidSpellTargets(state, c.id, c.instanceId);
+        if (validTargets.length === 0) return false;
+      }
+      return true;
+    });
 
     // 単体プレイ
     for (const card of playableCards) {
@@ -356,9 +437,16 @@ export class ScriptiaAIEngine {
 
       // 2枚コンボ（低コストの組み合わせ）
       const remainingMana = availableMana - card.cost;
-      const secondCards = hand.filter(
-        c => c.instanceId !== card.instanceId && c.cost <= remainingMana && this.checkAffinity(c, arcana)
-      );
+      const secondCards = hand.filter(c => {
+        if (c.instanceId === card.instanceId) return false;
+        if (c.cost > remainingMana) return false;
+        if (!this.checkAffinity(c, arcana)) return false;
+        if ((c.type === 'Spell' || c.cardType === 'SPELL') && c.targetReq && c.instanceId) {
+          const validTargets = getValidSpellTargets(state, c.id, c.instanceId);
+          if (validTargets.length === 0) return false;
+        }
+        return true;
+      });
       for (const sc of secondCards) {
         results.push([{ card }, { card: sc }]);
       }
@@ -466,6 +554,14 @@ export function getAIPlayableCards(state: GameState): (Card & { instanceId: stri
       if (tpl.id === 'BN-04' && human.runes.length === 0) {
         continue;
       }
+      
+      // Generic check for spells with target requirements
+      if (tpl.targetReq) {
+        const validTargets = getValidSpellTargets(state, tpl.id, cardInst.instanceId);
+        if (validTargets.length === 0) {
+          continue;
+        }
+      }
     }
 
     playable.push({
@@ -528,6 +624,14 @@ export function getAIPlayAction(state: GameState, card: Card & { instanceId: str
       const validArchive = ai.archive.filter(c => ['Spell', 'Rune'].includes(getCard(c.cardId).type));
       if (validArchive.length > 0) {
         targetId = validArchive[0].instanceId;
+      }
+    }
+
+    if (!targetId && tpl.targetReq) {
+      const validTargets = getValidSpellTargets(state, tpl.id, card.instanceId);
+      if (validTargets.length > 0) {
+        // Just pick the first valid target as fallback
+        targetId = validTargets[0];
       }
     }
 
