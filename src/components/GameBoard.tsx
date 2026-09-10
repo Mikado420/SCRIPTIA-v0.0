@@ -319,22 +319,52 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
   }, [state.currentPlayer, state.turnCount, state.phase, state.prompt, state.winner]);
 
   const runAITurnSequence = async () => {
-    if (isRunningAITurnRef.current) return;
+    if (isRunningAITurnRef.current) {
+      console.log('[AI] Turn already running, ignoring duplicate trigger.');
+      return;
+    }
     isRunningAITurnRef.current = true;
+    
+    // Safety check helper
+    const isSafeToContinue = () => {
+      return stateRef.current.currentPlayer === 'player2' && !stateRef.current.winner;
+    };
+
+    // Wait for prompt helper with timeout
+    const waitForPrompt = async (timeoutMs: number = 15000) => {
+      console.log('[AI] Waiting for prompt to resolve...');
+      const start = Date.now();
+      while (stateRef.current.prompt) {
+        if (Date.now() - start > timeoutMs) {
+          console.error(`[AI] Prompt wait timeout! Type: ${stateRef.current.prompt.type}`);
+          throw new Error('Prompt wait timeout');
+        }
+        await sleep(300);
+        if (!isSafeToContinue()) {
+          console.log('[AI] Game state changed during prompt wait, aborting wait.');
+          return false;
+        }
+      }
+      console.log('[AI] Prompt resolved.');
+      return true;
+    };
 
     try {
-      if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) return;
+      if (!isSafeToContinue()) return;
+      console.log(`[AI] --- Turn Start --- Turn: ${stateRef.current.turnCount}, Phase: ${stateRef.current.phase}`);
 
       // ① 総合プランの策定（全シミュレーション）
+      console.log('[AI] Thinking started...');
       const plan = ScriptiaAIEngine.planBestTurn(stateRef.current);
-      console.log("AI策定プラン:", plan.reason, "スコア:", plan.totalScore);
+      console.log("[AI] Plan generated:", plan.reason, "Score:", plan.totalScore);
       setAiThinkingText(plan.reason);
 
       // ② マナチャージの実行（プランでチャージが選ばれた場合のみ）
       if (stateRef.current.phase === 'ARCANA_PLACEMENT' && !stateRef.current.flags.hasPlacedArcanaThisTurn) {
         if (plan.chargeCard && plan.chargeCard.instanceId) {
           await sleep(1000);
-          if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) return;
+          if (!isSafeToContinue()) return;
+          console.log(`[AI] Charging arcana: ${plan.chargeCard.name}`);
           showToast(`相手がアルカナに【${plan.chargeCard.name}】を配置`, 'info');
           soundManager.playManaCharge();
           dispatch({ type: 'PLACE_ARCANA', instanceId: plan.chargeCard.instanceId });
@@ -342,30 +372,32 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
         } else {
           await sleep(600); // チャージしない場合も少し思考ウェイト
           if (stateRef.current.phase === 'ARCANA_PLACEMENT' && !stateRef.current.flags.hasPlacedArcanaThisTurn) {
+            console.log('[AI] Skipping arcana charge, next phase.');
             dispatch({ type: 'NEXT_PHASE' });
             await sleep(600);
           }
         }
       }
 
-      if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) return;
+      if (!isSafeToContinue()) return;
 
       // ③ カードプレイの順次実行
       for (const playAction of plan.plays) {
-        if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) return;
-        while (stateRef.current.prompt) {
-          await sleep(300);
-          if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) return;
-        }
+        if (!isSafeToContinue()) return;
+        
+        const promptCleared = await waitForPrompt();
+        if (!promptCleared) return;
 
         await sleep(900);
         const card = playAction.card;
         if (!card.instanceId) continue;
 
         if (stateRef.current.player2.field.length >= 6 && card.type !== 'Evolution' && card.cardType !== 'EVOLUTION') {
+          console.log(`[AI] Field full, skipping card: ${card.name}`);
           continue;
         }
 
+        console.log(`[AI] Playing card: ${card.name}`);
         setAiThinkingText(`【${card.name}】を展開中...`);
         const isEvolution = card.type === 'Evolution' || card.cardType === 'EVOLUTION';
         if (isEvolution) {
@@ -381,29 +413,34 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
 
         const action = getAIPlayAction(stateRef.current, card as any);
         dispatch(action);
+        console.log(`[AI] Card play action dispatched.`);
         await sleep(1000);
       }
 
-      if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) return;
+      if (!isSafeToContinue()) return;
 
       // ④ 攻撃の順次実行
       for (const attack of plan.attacks) {
-        if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) return;
-        while (stateRef.current.prompt) {
-          await sleep(300);
-          if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) return;
-        }
+        if (!isSafeToContinue()) return;
+        
+        const promptCleared = await waitForPrompt();
+        if (!promptCleared) return;
 
         const currentAttacker = stateRef.current.player2.field.find(u => u.instanceId === attack.attacker.instanceId);
-        if (!currentAttacker || currentAttacker.isRested) continue;
+        if (!currentAttacker || currentAttacker.isRested) {
+          console.log(`[AI] Attacker invalid or rested, skipping attack.`);
+          continue;
+        }
 
         await sleep(1100);
+        console.log(`[AI] Initiating attack with ${attack.attacker.card.name}`);
         setAiThinkingText(attack.targetType === 'PLAYER' ? '相手プレイヤー/結界へ攻撃' : `相手の【${attack.targetUnit?.card.name}】へ攻撃`);
         setActiveAttackerId(attack.attacker.instanceId);
         soundManager.playAttackLock();
         await sleep(600);
 
-        if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) {
+        if (!isSafeToContinue()) {
+          console.log(`[AI] Attack aborted due to state change.`);
           setActiveAttackerId(null);
           return;
         }
@@ -413,11 +450,13 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
         setTimeout(() => setIsScreenShaking(false), 380);
 
         if (attack.targetType === 'PLAYER') {
+          console.log(`[AI] Declaring attack on Player`);
           showToast(`相手の【${attack.attacker.card.name}】がプレイヤーへ直接攻撃！`, 'warn');
           dispatch({ type: 'DECLARE_ATTACK', attackerId: attack.attacker.instanceId });
         } else if (attack.targetUnit) {
           const targetExists = stateRef.current.player1.field.some(u => u.instanceId === attack.targetUnit!.instanceId);
           if (targetExists) {
+            console.log(`[AI] Declaring attack on Unit ${attack.targetUnit.card.name}`);
             showToast(`相手の【${attack.attacker.card.name}】が【${attack.targetUnit.card.name}】へ攻撃！`, 'warn');
             dispatch({
               type: 'DECLARE_ATTACK',
@@ -425,6 +464,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
               targetId: attack.targetUnit.instanceId,
             });
           } else if (!attack.attacker.card.restrictions?.cannotAttackPlayer) {
+            console.log(`[AI] Target unit disappeared, redirecting attack to Player`);
             showToast(`相手の【${attack.attacker.card.name}】がプレイヤーへ攻撃！`, 'warn');
             dispatch({ type: 'DECLARE_ATTACK', attackerId: attack.attacker.instanceId });
           }
@@ -432,29 +472,33 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
 
         setActiveAttackerId(null);
         await sleep(1100);
-        while (stateRef.current.prompt) {
-          await sleep(300);
-          if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) return;
-        }
+        
+        const afterAttackPromptCleared = await waitForPrompt();
+        if (!afterAttackPromptCleared) return;
       }
 
-      if (stateRef.current.currentPlayer !== 'player2' || stateRef.current.winner) return;
+      if (!isSafeToContinue()) return;
 
       // ⑤ ターン終了
+      console.log('[AI] Ending turn...');
       setAiThinkingText('ターン終了');
       await sleep(800);
-      if (stateRef.current.currentPlayer === 'player2' && !stateRef.current.winner) {
+      if (isSafeToContinue()) {
+        console.log('[AI] --- Turn Complete ---');
         dispatch({ type: 'NEXT_PHASE' });
       }
     } catch (err) {
-      console.error('[AI Turn Sequence Error]', err);
+      console.error('[AI] Exception during AI Turn Sequence:', err, 'State:', { turnCount: stateRef.current.turnCount, phase: stateRef.current.phase, currentPlayer: stateRef.current.currentPlayer });
+      // 安全な復旧（フォールバック）
       if (stateRef.current.currentPlayer === 'player2' && !stateRef.current.winner) {
+        console.log('[AI] Attempting safe fallback to NEXT_PHASE...');
         dispatch({ type: 'NEXT_PHASE' });
       }
     } finally {
       isRunningAITurnRef.current = false;
       setAiThinkingText(null);
       setActiveAttackerId(null);
+      console.log('[AI] Turn lock released.');
     }
   };
 
