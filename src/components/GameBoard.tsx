@@ -353,10 +353,40 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
       if (!isSafeToContinue()) return;
       console.log(`[AI] --- Turn Start --- Turn: ${stateRef.current.turnCount}, Phase: ${stateRef.current.phase}`);
 
+      // ⓪ 相手デッキ分析 (Opponent Analysis)
+      const oppProfile = ScriptiaAIEngine.analyzeOpponent(stateRef.current);
+      console.groupCollapsed('[AI] Opponent Analysis');
+      console.log('Archetype:');
+      oppProfile.deckArchetypes.forEach(d => console.log(`  ${d.type}: ${d.probability.toFixed(2)}`));
+      console.log('Likely Cards:');
+      oppProfile.cardProbabilities.slice(0, 3).forEach(c => console.log(`  ${getCard(c.cardId).name}: ${c.deckProbability.toFixed(2)}`));
+      console.log('Threats:');
+      oppProfile.cardProbabilities.slice(0, 3).forEach(c => {
+        let levelStr = 'Low';
+        if (c.threatLevel >= 0.8) levelStr = 'High';
+        else if (c.threatLevel >= 0.5) levelStr = 'Medium';
+        console.log(`  ${getCard(c.cardId).name}: ${levelStr} (${c.threatLevel.toFixed(2)})`);
+      });
+      if (oppProfile.likelyStrategies.length > 0) {
+        console.log('Likely Strategy:');
+        console.log(`  ${oppProfile.likelyStrategies[0].strategy}: ${oppProfile.likelyStrategies[0].probability.toFixed(2)}`);
+      }
+      console.groupEnd();
+
       // ① 総合プランの策定（全シミュレーション）
       console.log('[AI] Thinking started...');
-      const plan = ScriptiaAIEngine.planBestTurn(stateRef.current);
-      console.log("[AI] Plan generated:", plan.reason, "Score:", plan.totalScore);
+      const plan = ScriptiaAIEngine.planBestTurn(stateRef.current, oppProfile);
+      console.log("[AI] Plan generated:", plan.reason, "Expected Score:", plan.totalScore);
+      if (plan.debugLog) {
+         console.groupCollapsed('[AI Decision]');
+         console.log('Selected Plays:', plan.debugLog.selectedPlays);
+         console.log('Expected Value:', plan.debugLog.expectedValue.toFixed(2));
+         console.log('Opponent Responses:');
+         plan.debugLog.opponentResponses.forEach((r: any) => {
+            console.log(`  ${r.name} (${(r.prob * 100).toFixed(0)}%): Score ${r.score.toFixed(2)}`);
+         });
+         console.groupEnd();
+      }
       setAiThinkingText(plan.reason);
 
       // ② マナチャージの実行（プランでチャージが選ばれた場合のみ）

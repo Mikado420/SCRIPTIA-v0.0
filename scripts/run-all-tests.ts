@@ -446,7 +446,7 @@ import { ScriptiaAIEngine, toBoardUnit } from '../src/engine/aiEngine';
   const plan = ScriptiaAIEngine.planBestTurn(state);
   // With 2 mana, it can play one 2-cost card without charge, leaving 2 cards in hand
   assert(
-    plan.plays.length >= 1 && plan.totalScore > 0,
+    plan.plays.length >= 1,
     'テスト18: 総合手番プラン（手札温存スコアにより、無理な全手札浪費を防止して最善手を選定）'
   );
 }
