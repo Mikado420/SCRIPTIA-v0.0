@@ -134,9 +134,9 @@ const PlayerPlate = ({ mine, p, onOpenArchive }: { mine: boolean; p: GameState['
           }}
           className="ml-auto flex items-center gap-0.5 px-1.5 h-[20px] rounded-md active:scale-95 transition-transform"
           style={{ background: 'rgba(6,7,13,0.8)', border: '1px solid rgba(210,171,95,0.3)' }}
-          aria-label={`${mine ? '自分' : '相手'}の墓地を見る`}
+          aria-label={`${mine ? '自分' : '相手'}のアーカイブを見る`}
         >
-          墓地 <span className="sc-num text-parch-50 text-[11px]">{p.archive.length}</span>
+          アーカイブ <span className="sc-num text-parch-50 text-[11px]">{p.archive.length}</span>
         </button>
       </div>
     </div>
@@ -476,7 +476,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
       const c = ai.hand.find(h => h.instanceId === action.instanceId);
       if (c) {
         setAiThinkingText('魔力を集中');
-        showToast(`相手が【${getCard(c.cardId).name}】をアルカナに捧げた`, 'info');
+        showToast(`相手が【${getCard(c.cardId).name}】をアルカナに配置した`, 'info');
         soundManager.playManaCharge();
       }
     } else if (action.type === 'PLAY_CARD') {
@@ -489,7 +489,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
         showToast(`相手が【${t.name}】へ進化`, 'warn');
       } else if (t.type === 'Spell') {
         soundManager.playCardSwipe();
-        showToast(`相手が【${t.name}】を詠唱`, 'info');
+        showToast(`相手が【${t.name}】を発動`, 'info');
       } else {
         soundManager.playSummonUnit();
         if (t.type === 'Unit') {
@@ -678,9 +678,9 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
       if (isMyTurn && state.phase === 'ARCANA_PLACEMENT' && !state.flags.hasPlacedArcanaThisTurn) {
         handlePlaceHandArcana(card.instanceId);
       } else if (isMyTurn && state.flags.hasPlacedArcanaThisTurn) {
-        showToast('このターンはすでにアルカナを捧げました', 'warn');
+        showToast('このターンはすでにアルカナを配置しました', 'warn');
       } else if (isMyTurn) {
-        showToast('アルカナはチャージフェイズにだけ捧げられます', 'warn');
+        showToast('アルカナはアルカナ配置フェイズにだけ配置できます', 'warn');
       }
     } else if (zone === 'field') {
       // Dropped onto Field Arena
@@ -728,7 +728,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
           handlePlayHandCard(card.instanceId);
         }
       } else {
-        showToast(playBlockReason(tpl) ?? 'いまはプレイできません', 'warn');
+        showToast(playBlockReason(tpl) ?? 'いまは使用できません', 'warn');
       }
     }
 
@@ -1487,7 +1487,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
     const c = me.hand.find(h => h.instanceId === instanceId);
     soundManager.playManaCharge();
     dispatch({ type: 'PLACE_ARCANA', instanceId });
-    if (c) showToast(`【${getCard(c.cardId).name}】をアルカナに捧げた`, 'success');
+    if (c) showToast(`【${getCard(c.cardId).name}】をアルカナに配置した`, 'success');
     setArcanaFlash(true);
     setTimeout(() => setArcanaFlash(false), 700);
     setSelectedCardId(null);
@@ -1510,7 +1510,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
   // プレイできない理由（ボタン・通知で「なぜ押せないか」を伝える）
   const playBlockReason = (tpl: CardTemplate): string | null => {
     if (!isMyTurn) return '相手のターンです';
-    if (state.phase !== 'ACTION') return 'チャージフェイズ中です';
+    if (state.phase !== 'ACTION') return 'アルカナ配置フェイズ中です';
     if (me.currentArcana < tpl.cost) return `アルカナが足りません（あと${tpl.cost - me.currentArcana}）`;
     if (tpl.type === 'Unit' && me.field.length >= 6) return '場がいっぱいです';
     if (tpl.type === 'Evolution' && me.field.length === 0) return '進化元のユニットがいません';
@@ -1602,16 +1602,16 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
   else if (pendingSpell) guide = { text: pendingSpell.message, tone: 'target' };
   else if (state.prompt?.type === 'TARGET_SELECTION' && state.prompt.playerId === 'player1') guide = { text: state.prompt.message || '対象を選択してください', tone: 'target' };
   else if (state.prompt) guide = { text: '選択してください', tone: 'target' };
-  else if (state.phase === 'ARCANA_PLACEMENT') guide = { text: '手札を1枚選んでアルカナに捧げる（オーブへドラッグも可）', tone: 'mine' };
+  else if (state.phase === 'ARCANA_PLACEMENT') guide = { text: '手札を1枚選んでアルカナに配置する（オーブへドラッグも可）', tone: 'mine' };
   else if (selectedAttacker) guide = { text: '攻撃先を選択 ・ 相手ユニット または 結界', tone: 'target' };
   else if (selectedHandTpl?.type === 'Evolution') guide = { text: '進化させる自分のユニットをタップ', tone: 'target' };
-  else if (readyAttackers.length > 0 || playableHandCount > 0) guide = { text: 'カードをプレイ ・ 光るユニットを引いて攻撃', tone: 'mine' };
+  else if (readyAttackers.length > 0 || playableHandCount > 0) guide = { text: 'カードを使用 ・ 光るユニットを引いて攻撃', tone: 'mine' };
   else guide = { text: 'できる行動はありません ・ ターン終了', tone: 'mine' };
 
   const openArchive = (mine: boolean) =>
     setZoneModal({
       isOpen: true,
-      title: mine ? '自分の墓地（アーカイブ）' : '相手の墓地（アーカイブ）',
+      title: mine ? '自分のアーカイブ' : '相手のアーカイブ',
       zoneType: 'archive',
       cards: mine ? me.archive : opp.archive,
       isOpponent: !mine,
@@ -1801,9 +1801,9 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
 
   const selectedBarLabel = (() => {
     if (!selectedHandTpl) return null;
-    if (state.phase === 'ARCANA_PLACEMENT') return state.flags.hasPlacedArcanaThisTurn ? null : 'アルカナに捧げる';
+    if (state.phase === 'ARCANA_PLACEMENT') return state.flags.hasPlacedArcanaThisTurn ? null : 'アルカナに配置する';
     if (selectedHandTpl.type === 'Unit') return '召喚する';
-    if (selectedHandTpl.type === 'Spell') return '詠唱する';
+    if (selectedHandTpl.type === 'Spell') return '発動する';
     if (selectedHandTpl.type === 'Evolution') return null;
     return '設置する';
   })();
@@ -2035,7 +2035,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
                       onClick={e => {
                         e.stopPropagation();
                         setPendingSpell(null);
-                        showToast('詠唱をやめました', 'info');
+                        showToast('発動をやめました', 'info');
                       }}
                       className="ml-1 px-2 h-[18px] rounded-full text-[10px] font-bold"
                       style={{ background: 'rgba(125,35,32,0.9)', color: '#ffe3df' }}
@@ -2212,11 +2212,11 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
               let ok = true;
               if (dragHoverZone === 'arcana') {
                 ok = isMyTurn && state.phase === 'ARCANA_PLACEMENT' && !state.flags.hasPlacedArcanaThisTurn;
-                text = ok ? '離してアルカナに捧げる' : state.flags.hasPlacedArcanaThisTurn ? '今ターンは捧げ済み' : 'チャージフェイズのみ';
+                text = ok ? '離してアルカナに配置する' : state.flags.hasPlacedArcanaThisTurn ? '今ターンは配置済み' : 'アルカナ配置フェイズのみ';
               } else if (dragHoverZone === 'field') {
                 const reason = playBlockReason(tpl);
                 ok = !reason;
-                text = reason ?? (tpl.type === 'Spell' ? '離して詠唱' : tpl.type === 'Evolution' ? '進化元の上で離す' : '離して召喚');
+                text = reason ?? (tpl.type === 'Spell' ? '離して発動' : tpl.type === 'Evolution' ? '進化元の上で離す' : '離して召喚');
               }
               return text ? (
                 <div
@@ -2305,7 +2305,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
             open
             dismissible={false}
             width={myPrompt.type === 'GUARD' ? 440 : 340}
-            eyebrow={myPrompt.type === 'GUARD' ? 'Guard' : myPrompt.type === 'RUNE_TRIGGER' ? 'Rune' : 'Trigger'}
+            eyebrow={myPrompt.type === 'GUARD' ? '守護' : myPrompt.type === 'RUNE_TRIGGER' ? 'ルーン' : '発動'}
             title={myPrompt.type === 'GUARD' ? '守護しますか？' : myPrompt.type === 'RUNE_TRIGGER' ? 'ルーン発動' : '効果を発動しますか？'}
             icon={myPrompt.type === 'GUARD' ? <Shield size={20} /> : <Zap size={20} />}
             tone={myPrompt.type === 'GUARD' ? 'danger' : 'arcane'}
