@@ -18,7 +18,7 @@ interface Props {
 }
 
 const STEPS: { id: 'charge' | 'action' | 'end'; label: string }[] = [
-  { id: 'charge', label: 'チャージ' },
+  { id: 'charge', label: 'アルカナ' },
   { id: 'action', label: '行動' },
   { id: 'end', label: '終了' },
 ];
