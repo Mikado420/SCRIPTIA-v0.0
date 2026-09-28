@@ -1,7 +1,7 @@
 import React from 'react';
-import { CardInstance, System } from '../types';
+import { CardInstance } from '../types';
 import { getCard } from '../data/cards';
-import { Flame, Droplet, Mountain, Sun, Moon, Sparkles } from 'lucide-react';
+import { ElementDot, ELEMENTS } from './ui/elements';
 
 interface Props {
   current: number;
@@ -12,125 +12,66 @@ interface Props {
   onOpenArcana: () => void;
   onOpenArchive?: () => void;
   isOpponent?: boolean;
+  /** ドラッグ中に「ここへ置ける」ことを示す */
+  highlight?: boolean;
 }
 
-// Strictly the 5 elemental systems
-const ELEMENTAL_SYSTEMS: { id: System; name: string; color: string; glow: string; icon: React.ReactNode }[] = [
-  { id: 'Fire', name: '火', color: 'bg-red-600 text-white', glow: 'shadow-[0_0_6px_rgba(239,68,68,0.9)]', icon: <Flame size={9} className="fill-current" /> },
-  { id: 'Water', name: '水', color: 'bg-blue-600 text-white', glow: 'shadow-[0_0_6px_rgba(59,130,246,0.9)]', icon: <Droplet size={9} className="fill-current" /> },
-  { id: 'Earth', name: '地', color: 'bg-emerald-600 text-white', glow: 'shadow-[0_0_6px_rgba(16,185,129,0.9)]', icon: <Mountain size={9} className="fill-current" /> },
-  { id: 'Light', name: '光', color: 'bg-amber-400 text-slate-950', glow: 'shadow-[0_0_6px_rgba(245,158,11,0.9)]', icon: <Sun size={9} className="fill-current" /> },
-  { id: 'Dark', name: '闇', color: 'bg-purple-700 text-white', glow: 'shadow-[0_0_6px_rgba(168,85,247,0.9)]', icon: <Moon size={9} className="fill-current" /> },
-];
+const SYSTEMS = ['Fire', 'Water', 'Earth', 'Light', 'Dark'] as const;
 
-export const ArcanaGauge: React.FC<Props> = ({
-  current,
-  max,
-  arcanaCards,
-  onOpenArcana,
-  isOpponent = false,
-}) => {
-  // Active systems in Arcana zone
-  const activeSystems = new Set(arcanaCards.map(c => getCard(c.cardId).system).filter(s => s !== 'Neutral'));
+/**
+ * アルカナ（魔力）の魔法石。中央に「使える量 / 最大量」、下に解放済みの属性。
+ * 使い切っている時は石が暗くなるので、残量が一目で分かる。
+ */
+export const ArcanaGauge: React.FC<Props> = ({ current, max, arcanaCards, onOpenArcana, isOpponent = false, highlight }) => {
+  const active = new Set(arcanaCards.map(c => getCard(c.cardId).system).filter(s => s !== 'Neutral'));
+  const ratio = max > 0 ? current / max : 0;
+  const tint = isOpponent ? '227,102,92' : '79,214,194';
 
-  // 3D Circular Arcana Orb (Duel Masters Plays Mana Zone Orb style)
-  // Symmetrically rendered for both player (bottom-left) and opponent (top-right)
   return (
-    <div
-      className={`flex items-center space-x-1.5 select-none pointer-events-auto shrink-0 ${
-        isOpponent ? 'flex-row-reverse space-x-reverse' : ''
-      }`}
+    <button
+      type="button"
+      onClick={e => {
+        e.stopPropagation();
+        onOpenArcana();
+      }}
+      className="flex items-center gap-2 select-none active:scale-95 transition-transform"
+      aria-label={`${isOpponent ? '相手' : '自分'}のアルカナ ${current}/${max}`}
     >
-      {/* 3D Circular Arcana Orb (diameter ~64px) */}
-      <button
-        type="button"
-        onClick={onOpenArcana}
-        className="relative group cursor-pointer active:scale-95 transition-transform"
-        title={isOpponent ? '相手のアルカナゾーン確認 (タップで展開)' : '自分のアルカナゾーン確認 (タップで展開)'}
+      <div
+        className="relative w-[54px] h-[54px] rounded-full shrink-0 flex items-center justify-center"
+        style={{
+          background: 'conic-gradient(from 200deg, #f2dea6, #85652f, #e6c77f, #5c451f, #f2dea6)',
+          padding: 2.5,
+          boxShadow: highlight
+            ? `0 0 0 3px rgba(${tint},0.9), 0 0 22px rgba(${tint},0.8)`
+            : '0 3px 10px rgba(0,0,0,0.6)',
+          transition: 'box-shadow 160ms ease',
+        }}
       >
-        {/* Pulsing Mana Aura */}
         <div
-          className={`absolute -inset-1 rounded-full blur-md transition-colors animate-pulse ${
-            isOpponent
-              ? 'bg-amber-500/30 group-hover:bg-amber-400/60'
-              : 'bg-cyan-500/30 group-hover:bg-cyan-400/60'
-          }`}
-        />
-
-        {/* Outer Metallic Bezel with Cyber Ring */}
-        <div
-          className={`relative w-[64px] h-[64px] rounded-full p-1 shadow-[0_4px_16px_rgba(0,0,0,0.85)] flex items-center justify-center border-2 ${
-            isOpponent
-              ? 'bg-gradient-to-b from-amber-400 via-red-950 to-black border-amber-400'
-              : 'bg-gradient-to-b from-amber-300 via-slate-900 to-black border-amber-400'
-          }`}
+          className="w-full h-full rounded-full flex flex-col items-center justify-center relative overflow-hidden"
+          style={{
+            background: `radial-gradient(circle at 40% 30%, rgba(${tint},${0.25 + ratio * 0.55}) 0%, #0b0d17 70%)`,
+            boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.7), inset 0 -6px 12px rgba(0,0,0,0.6)',
+          }}
         >
-          {/* Inner Glowing Crystal Sphere */}
-          <div
-            className={`w-full h-full rounded-full border flex flex-col items-center justify-center relative overflow-hidden shadow-inner ${
-              isOpponent
-                ? 'bg-gradient-to-br from-red-950 via-slate-950 to-amber-950 border-amber-400/60'
-                : 'bg-gradient-to-br from-cyan-950 via-slate-950 to-blue-950 border-cyan-400/60'
-            }`}
-          >
-            {/* Top Gloss Highlight */}
-            <div className="absolute top-0 inset-x-2 h-1/2 rounded-t-full bg-gradient-to-b from-white/30 to-transparent pointer-events-none" />
-
-            {/* Top Micro Label */}
-            <span
-              className={`text-[6px] font-black tracking-wider uppercase leading-none z-10 ${
-                isOpponent ? 'text-amber-300' : 'text-cyan-300'
-              }`}
-            >
-              MANA
+          <div className="absolute top-0.5 inset-x-3 h-2.5 rounded-full bg-gradient-to-b from-white/20 to-transparent" />
+          <div className="flex items-baseline leading-none z-10">
+            <span className="sc-num text-[21px]" style={{ color: current > 0 ? '#fbf0d2' : '#c9bda2', textShadow: '0 1px 3px rgba(0,0,0,0.9)' }}>
+              {current}
             </span>
-
-            {/* Digital Numbers: Current / Max */}
-            <div className="flex items-baseline justify-center font-mono font-black text-white leading-none my-0.5 z-10">
-              <span
-                className={`text-lg drop-shadow-[0_0_8px_rgba(245,158,11,1)] ${
-                  isOpponent ? 'text-amber-300' : 'text-cyan-200'
-                }`}
-              >
-                {current}
-              </span>
-              <span className="text-[9px] text-white/40 mx-0.5">/</span>
-              <span className="text-[10.5px] text-slate-300">
-                {max}
-              </span>
-            </div>
-
-            {/* Bottom mini status */}
-            <span
-              className={`text-[5.5px] font-bold z-10 tracking-tighter ${
-                isOpponent ? 'text-red-300/90' : 'text-amber-300/90'
-              }`}
-            >
-              ARCANA
-            </span>
+            <span className="sc-num text-[11px] text-parch-300 ml-0.5" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.9)' }}>/{max}</span>
           </div>
+          <span className="text-[7.5px] font-bold tracking-widest z-10 mt-0.5" style={{ color: `rgb(${tint})` }}>
+            アルカナ
+          </span>
         </div>
-      </button>
-
-      {/* 5 Elemental Affinity Gems Column */}
-      <div className="flex flex-col space-y-0.5 bg-black/70 backdrop-blur-sm p-1 rounded-xl border border-white/10 shadow-md">
-        {ELEMENTAL_SYSTEMS.map(sys => {
-          const isActive = activeSystems.has(sys.id);
-          return (
-            <div
-              key={sys.id}
-              className={`w-3 h-3 rounded-full flex items-center justify-center text-[5.5px] font-black border transition-all ${
-                isActive
-                  ? `${sys.color} ${sys.glow} border-white/80 scale-110`
-                  : 'bg-slate-900/90 border-slate-700 text-slate-600 opacity-25 grayscale'
-              }`}
-              title={`${sys.name}系統: ${isActive ? '解放済' : '未解放'}`}
-            >
-              {sys.icon}
-            </div>
-          );
-        })}
       </div>
-    </div>
+      <div className="grid grid-cols-3 gap-[3px]">
+        {SYSTEMS.map(s => (
+          <ElementDot key={s} element={s} size={14} active={active.has(s)} title={`${ELEMENTS[s].label}属性: ${active.has(s) ? '使用可能' : '未解放'}`} />
+        ))}
+      </div>
+    </button>
   );
 };

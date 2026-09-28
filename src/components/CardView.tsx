@@ -1,9 +1,10 @@
 import React from 'react';
 import { CardInstance, CardTemplate } from '../types';
 import { getCard } from '../data/cards';
-import { Info, Shield, Moon, Sword } from 'lucide-react';
+import { Shield, Zap, Skull, ShieldOff, Crosshair, Ban, Moon, Sword } from 'lucide-react';
+import { ElementSigil, elementOf, TYPE_LABEL, LINEAGE_LABEL, KEYWORD_INFO } from './ui/elements';
 
-export type CardViewSize = 'field' | 'hand' | 'opponent-hand' | 'compact' | 'default';
+export type CardViewSize = 'field' | 'hand' | 'opponent-hand' | 'compact' | 'grid' | 'large' | 'default';
 
 interface CardViewProps {
   instance?: CardInstance;
@@ -14,41 +15,82 @@ interface CardViewProps {
   className?: string;
   isFaceDown?: boolean;
   selected?: boolean;
+  /** 手札: プレイ可能（false なら暗く表示）/ 盤面: 攻撃可能 */
   playable?: boolean;
   computedStats?: { atk: number; def: number; brk: number };
   size?: CardViewSize;
   isRested?: boolean;
   hasSummoningSickness?: boolean;
   evoCount?: number;
+  isDragging?: boolean;
+  /** 手札で playable=false でも暗くしない（相手ターン中など） */
+  noDim?: boolean;
+  /** large で効果テキストを出さない（横に説明パネルがある時） */
+  hideEffect?: boolean;
 }
 
-const typeMap: Record<string, string> = {
-  'Unit': 'ユニット',
-  'Spell': 'スペル',
-  'Rune': 'ルーン',
-  'Domain': 'ドメイン',
-  'Evolution': '進化',
+const SIZE: Record<CardViewSize, { w: number; h: number }> = {
+  'opponent-hand': { w: 28, h: 39 },
+  compact: { w: 40, h: 56 },
+  field: { w: 70, h: 96 },
+  hand: { w: 72, h: 100 },
+  grid: { w: 86, h: 120 },
+  default: { w: 96, h: 134 },
+  large: { w: 176, h: 246 },
 };
 
-const lineageMap: Record<string, string> = {
-  'Rampage': 'ランページ',
-  'Mechanoid': 'メカノイド',
-  'Dragon': 'ドラゴン',
-  'Merfolk': 'マーフォーク',
-  'Aquatica': 'アクアティカ',
-  'Leviathan': 'リヴァイアサン',
-  'Bestia': 'ベスティア',
-  'Insect': 'インセクト',
-  'Titan': 'タイタン',
-  'Guardian': 'ガーディアン',
-  'Oracle': 'オラクル',
-  'Angel': 'エンジェル',
-  'Parasite': 'パラサイト',
-  'Ghost': 'ゴースト',
-  'Demon': 'デーモン',
-  'Neutral': 'ニュートラル',
-  'None': '',
+const KEYWORD_ICON: Record<string, React.ComponentType<{ size?: number; strokeWidth?: number }>> = {
+  Guard: Shield,
+  Rush: Zap,
+  Lethal: Skull,
+  CannotBeGuarded: ShieldOff,
+  CanAttackActive: Crosshair,
+  CannotAttackPlayer: Ban,
 };
+
+export const cardKeywords = (card: CardTemplate): string[] => {
+  const set = new Set<string>(card.keywords ?? []);
+  if (card.restrictions?.cannotAttackPlayer) set.add('CannotAttackPlayer');
+  if (card.restrictions?.cannotBeGuarded) set.add('CannotBeGuarded');
+  if (card.restrictions?.canAttackActive) set.add('CanAttackActive');
+  return [...set].filter(k => KEYWORD_INFO[k]);
+};
+
+/** カード裏面（相手の手札・伏せルーン・山札） */
+export const CardBack: React.FC<{ w: number; h: number; className?: string; onClick?: (e: React.MouseEvent) => void }> = ({
+  w,
+  h,
+  className = '',
+  onClick,
+}) => (
+  <div
+    onClick={onClick}
+    className={`relative shrink-0 overflow-hidden select-none ${className}`}
+    style={{
+      width: w,
+      height: h,
+      borderRadius: Math.max(3, w * 0.08),
+      background: 'radial-gradient(circle at 50% 45%, #2a2340 0%, #14172a 55%, #0a0b14 100%)',
+      border: '1px solid #9c7b3f',
+      boxShadow: 'inset 0 0 0 2px rgba(0,0,0,0.55), inset 0 0 0 3px rgba(210,171,95,0.35), 0 2px 5px rgba(0,0,0,0.5)',
+    }}
+  >
+    <svg viewBox="0 0 100 140" className="absolute inset-0 w-full h-full" preserveAspectRatio="none">
+      <circle cx="50" cy="70" r="30" fill="none" stroke="#d2ab5f" strokeOpacity="0.55" strokeWidth="2" />
+      <circle cx="50" cy="70" r="22" fill="none" stroke="#d2ab5f" strokeOpacity="0.35" strokeWidth="1" strokeDasharray="3 3" />
+      <polygon points="50,44 72,82 28,82" fill="none" stroke="#e6c77f" strokeOpacity="0.4" strokeWidth="1.2" />
+      <polygon points="50,96 28,58 72,58" fill="none" stroke="#e6c77f" strokeOpacity="0.4" strokeWidth="1.2" />
+    </svg>
+    {w >= 26 && (
+      <div
+        className="absolute inset-0 flex items-center justify-center font-rune font-bold"
+        style={{ color: '#f2dea6', fontSize: Math.max(7, w * 0.26), textShadow: '0 0 6px rgba(230,199,127,0.5)' }}
+      >
+        S
+      </div>
+    )}
+  </div>
+);
 
 export const CardView: React.FC<CardViewProps> = ({
   instance,
@@ -65,286 +107,262 @@ export const CardView: React.FC<CardViewProps> = ({
   isRested,
   hasSummoningSickness,
   evoCount = 1,
+  isDragging,
+  noDim,
+  hideEffect,
 }) => {
   const card = template || (instance ? getCard(instance.cardId) : null);
+  const { w, h } = SIZE[size];
 
-  // Size dimensions map
-  const sizeClasses = {
-    'opponent-hand': 'w-[30px] h-[40px] rounded-sm',
-    'field': 'w-[68px] h-[90px] rounded-lg',
-    'hand': 'w-[60px] h-[84px] rounded-lg',
-    'compact': 'w-[52px] h-[70px] rounded-md',
-    'default': 'w-24 h-34 sm:w-28 sm:h-40 rounded-md',
-  }[size];
-
-  // Face down rendering
   if (isFaceDown || !card) {
-    return (
-      <div
-        onClick={onClick}
-        onContextMenu={onContextMenu}
-        className={`${sizeClasses} bg-gradient-to-br from-slate-800 via-slate-900 to-indigo-950 border border-amber-500/40 shadow-md flex items-center justify-center cursor-pointer select-none relative overflow-hidden transition-transform shrink-0 ${className}`}
-      >
-        <div className="absolute inset-0 bg-[radial-gradient(#3b82f6_1px,transparent_1px)] [background-size:6px_6px] opacity-20" />
-        <div className="w-5 h-5 rounded-full border border-amber-400/60 flex items-center justify-center bg-black/40 shadow-inner">
-          <span className="text-amber-300 font-serif text-[10px] font-black">S</span>
-        </div>
-      </div>
-    );
+    return <CardBack w={w} h={h} onClick={onClick} className={className} />;
   }
 
-  const sysColor = {
-    Fire: 'from-red-950 via-slate-900 to-red-950 border-red-500/80 text-red-100',
-    Water: 'from-blue-950 via-slate-900 to-blue-950 border-blue-500/80 text-blue-100',
-    Earth: 'from-emerald-950 via-slate-900 to-emerald-950 border-emerald-500/80 text-emerald-100',
-    Light: 'from-amber-950 via-slate-900 to-yellow-950 border-amber-400/80 text-amber-100',
-    Dark: 'from-purple-950 via-slate-900 to-slate-950 border-purple-500/80 text-purple-200',
-    Neutral: 'from-slate-800 via-slate-900 to-slate-800 border-slate-400/60 text-slate-100',
-  }[card.system];
-
-  const badgeColor = {
-    Fire: 'bg-red-600 text-white',
-    Water: 'bg-blue-600 text-white',
-    Earth: 'bg-emerald-600 text-white',
-    Light: 'bg-amber-400 text-slate-950',
-    Dark: 'bg-purple-700 text-white',
-    Neutral: 'bg-slate-600 text-white',
-  }[card.system];
-
-  const displayAtk = computedStats ? computedStats.atk : card.atk;
-  const displayDef = computedStats ? computedStats.def : card.def;
-  const displayBrk = computedStats ? computedStats.brk : card.brk;
-
+  const el = elementOf(card.system);
   const isUnit = card.type === 'Unit' || card.type === 'Evolution';
-  const hasGuard = card.keywords?.includes('Guard');
+  const atk = computedStats ? computedStats.atk : card.atk ?? 0;
+  const def = computedStats ? computedStats.def : card.def ?? 0;
+  const brk = computedStats ? computedStats.brk : card.brk ?? 1;
+  const atkBuff = computedStats && card.atk !== undefined ? Math.sign(computedStats.atk - card.atk) : 0;
+  const defBuff = computedStats && card.def !== undefined ? Math.sign(computedStats.def - card.def) : 0;
+  const keywords = cardKeywords(card);
 
-  // 1. FIELD CARD DISPLAY (Duel Masters Plays Creature Plate)
-  if (size === 'field') {
-    return (
-      <div
-        onClick={onClick}
-        onContextMenu={onContextMenu}
-        className={`relative ${sizeClasses} bg-gradient-to-b ${sysColor} border-2 flex flex-col justify-between select-none overflow-hidden shrink-0 transition-all duration-200 shadow-lg
-          ${selected ? 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-black scale-105 z-30 shadow-yellow-500/50' : ''}
-          ${playable ? 'cursor-pointer hover:border-yellow-300' : ''}
-          ${isRested ? 'rotate-90 scale-[0.75] origin-center opacity-85 shadow-md' : ''}
-          ${className}
-        `}
-      >
-        {/* Top-Left: Cost Badge */}
-        <div className={`absolute -top-1 -left-1 w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center font-black text-[8.5px] sm:text-[10px] border border-black shadow-md z-20 ${badgeColor}`}>
-          {card.cost}
-        </div>
+  const small = w < 60;
+  const isLarge = size === 'large';
+  const showType = w >= 72 && (isUnit || isLarge);
+  const showEffect = isLarge && !hideEffect;
 
-        {/* Top-Right: Evolution Counter or Guard Sigil */}
-        <div className="absolute top-0.5 right-0.5 flex items-center space-x-0.5 z-20">
-          {hasGuard && (
-            <div className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded bg-cyan-950 border border-cyan-400 text-cyan-300 flex items-center justify-center shadow" title="ガード能力">
-              <Shield size={9} className="fill-cyan-400/40" />
-            </div>
-          )}
-          {evoCount > 1 && (
-            <div className="bg-yellow-400 text-slate-950 text-[7px] sm:text-[8px] font-black px-1 rounded-full border border-black shadow">
-              +{evoCount - 1}
-            </div>
-          )}
-        </div>
+  const radius = Math.max(4, w * 0.075);
+  const gem = Math.round(w * (small ? 0.36 : 0.26));
+  const nameSize = isLarge ? 15 : small ? Math.max(6, w * 0.15) : Math.max(7.2, w * 0.108);
+  const statSize = isLarge ? 20 : Math.max(9, w * 0.165);
 
-        {/* Name Bar */}
-        <div className="pt-2 sm:pt-2.5 px-0.5 sm:px-1 pb-0.5 bg-black/75 text-center truncate whitespace-nowrap overflow-hidden text-[7px] sm:text-[8.5px] leading-tight font-black tracking-tight text-white shadow-inner">
-          {card.name}
-        </div>
+  const dimmed = size === 'hand' && playable === false && !noDim;
+  const ready = size === 'field' && playable && !isRested;
 
-        {/* Center Art / Sigil Area */}
-        <div className="flex-1 flex flex-col items-center justify-center relative my-0.5 px-0.5 sm:px-1">
-          <div className="w-5 h-5 sm:w-7 sm:h-7 rounded-full border border-white/20 bg-black/40 flex items-center justify-center shadow-inner">
-            <span className="text-[7.5px] sm:text-[9px] font-black text-white/70">{card.system[0]}</span>
-          </div>
-          {card.lineage && (
-            <span className="text-[5.5px] sm:text-[6.5px] font-bold text-amber-300/80 truncate max-w-full mt-0.5">
-              {lineageMap[card.lineage] || card.lineage}
-            </span>
-          )}
+  const ring = selected
+    ? '0 0 0 2px #fbeec4, 0 0 0 3.5px rgba(173,135,68,0.9), 0 0 18px rgba(230,199,127,0.6)'
+    : size === 'hand' && playable
+      ? '0 0 0 1.5px rgba(134,236,220,0.9), 0 0 10px rgba(79,214,194,0.45)'
+      : '0 3px 8px rgba(0,0,0,0.55)';
 
-          {/* Summoning Sickness (Sleep / 待機 indicator) */}
-          {hasSummoningSickness && !isRested && (
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] flex items-center justify-center z-10">
-              <div className="bg-amber-950/90 border border-amber-400/80 px-1 py-0.5 rounded-full flex items-center space-x-0.5 shadow-lg animate-pulse">
-                <Moon size={8} className="text-yellow-300 fill-yellow-300" />
-                <span className="text-[6.5px] sm:text-[7.5px] font-black text-amber-200">待機</span>
-              </div>
-            </div>
-          )}
-        </div>
+  const typeLine = [TYPE_LABEL[card.type] || card.type, card.lineage && card.lineage !== 'None' ? LINEAGE_LABEL[card.lineage] || card.lineage : null]
+    .filter(Boolean)
+    .join(' ・ ');
 
-        {/* Bottom Combat Stats Bar (Duel Masters Metallic Power Plate: IMG_9587) */}
-        {isUnit && (
-          <div className="grid grid-cols-2 items-center py-1 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border-t border-amber-400/40 text-center shadow-lg">
-            <div className="flex items-center justify-center space-x-0.5 border-r border-white/10" title="ATK (攻撃力)">
-              <span className="text-[7.5px] font-bold text-red-400/80">ATK</span>
-              <span className="text-[10.5px] sm:text-[11.5px] font-black text-red-300 drop-shadow">{displayAtk}</span>
-            </div>
-            <div className="flex items-center justify-center space-x-0.5" title="DEF (守備力)">
-              <span className="text-[7.5px] font-bold text-blue-400/80">DEF</span>
-              <span className="text-[10.5px] sm:text-[11.5px] font-black text-blue-300 drop-shadow">{displayDef}</span>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // 2. HAND CARD DISPLAY
-  if (size === 'hand') {
-    return (
-      <div
-        onClick={onClick}
-        onContextMenu={onContextMenu}
-        className={`relative ${sizeClasses} bg-gradient-to-b ${sysColor} border-2 flex flex-col justify-between select-none overflow-hidden shrink-0 transition-all shadow-lg
-          ${selected ? 'ring-3 ring-yellow-400 ring-offset-2 ring-offset-black -translate-y-3 scale-105 z-30 shadow-yellow-500/50' : 'hover:-translate-y-2 hover:scale-105'}
-          ${
-            playable
-              ? 'border-emerald-400 ring-2 ring-emerald-400/90 shadow-[0_0_18px_rgba(52,211,153,0.85)] animate-pulse cursor-pointer hover:border-emerald-300 hover:shadow-[0_0_24px_rgba(52,211,153,1)]'
-              : 'opacity-50 grayscale-[40%] brightness-75 border-slate-700/60'
-          }
-          ${className}
-        `}
-      >
-        {/* Cost Badge */}
-        <div className={`absolute -top-1 -left-1 w-5 h-5 rounded-full flex items-center justify-center font-black text-[10px] border border-black shadow z-10 ${badgeColor}`}>
-          {card.cost}
-        </div>
-
-        {/* Inspect / Info button */}
-        {onInspect && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onInspect();
-            }}
-            title="詳細を見る"
-            className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/60 hover:bg-black text-amber-300 flex items-center justify-center z-20 border border-amber-400/40"
-          >
-            <Info size={10} />
-          </button>
-        )}
-
-        {/* Name and Type */}
-        <div className="pt-3 px-1 pb-0.5 bg-black/60 text-center">
-          <div className="truncate whitespace-nowrap overflow-hidden text-[11px] leading-tight font-black tracking-tight text-white">
-            {card.name}
-          </div>
-          <div className="text-[6.5px] text-amber-300/90 font-bold uppercase tracking-tight truncate">
-            {typeMap[card.type] || card.type} {card.lineage ? `• ${lineageMap[card.lineage] || card.lineage}` : ''}
-          </div>
-        </div>
-
-        {/* Center Art Area */}
-        <div className="flex-1 flex flex-col items-center justify-center relative p-1 bg-black/10">
-          <div className="w-6 h-6 rounded-full border border-white/20 flex items-center justify-center">
-            <span className="text-[8px] font-black text-white/50">{card.system}</span>
-          </div>
-          {card.effectText && (
-            <div className="text-[6.5px] text-slate-200 line-clamp-2 text-center mt-0.5 leading-tight opacity-90">
-              {card.effectText.replace(/◆|【|】/g, '')}
-            </div>
-          )}
-        </div>
-
-        {/* Stats Footer for Units */}
-        {isUnit ? (
-          <div className="flex justify-between items-center px-1.5 py-0.5 bg-black/85 text-[9px] font-black border-t border-white/10 leading-none">
-            <span className="text-red-400">{card.atk}</span>
-            <span className="text-yellow-400 text-[8px] bg-slate-900 px-1 rounded">{card.brk}</span>
-            <span className="text-blue-400">{card.def}</span>
-          </div>
-        ) : (
-          <div className="text-center py-0.5 bg-black/85 text-[7px] font-bold text-amber-300 border-t border-white/10 uppercase">
-            {typeMap[card.type]}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // 3. COMPACT CARD DISPLAY (Domain / Rune slot: 52px x 70px)
-  if (size === 'compact') {
-    return (
-      <div
-        onClick={onClick}
-        onContextMenu={onContextMenu}
-        className={`relative ${sizeClasses} bg-gradient-to-b ${sysColor} border-2 flex flex-col justify-between select-none overflow-hidden shrink-0 shadow-md ${className}`}
-      >
-        {/* Top-Left Cost Badge */}
-        <div className={`absolute -top-1 -left-1 w-4 h-4 rounded-full flex items-center justify-center font-black text-[9px] border border-black shadow z-10 ${badgeColor}`}>
-          {card.cost}
-        </div>
-
-        {/* Card Name Bar */}
-        <div className="pt-2.5 px-0.5 pb-0.5 bg-black/75 truncate whitespace-nowrap overflow-hidden text-[8px] leading-tight font-black tracking-tight text-center text-white shadow-inner">
-          {card.name}
-        </div>
-
-        {/* Center Sigil / Type Icon Area */}
-        <div className="flex-1 flex flex-col items-center justify-center py-0.5 px-1 bg-black/20">
-          <div className="w-5 h-5 rounded-full border border-white/20 bg-black/40 flex items-center justify-center shadow-inner">
-            <span className="text-[8px] font-black text-white/80">{card.system[0]}</span>
-          </div>
-          {card.lineage ? (
-            <span className="text-[6px] text-amber-300 font-bold truncate max-w-full mt-0.5">
-              {lineageMap[card.lineage] || card.lineage}
-            </span>
-          ) : (
-            <span className="text-[6px] text-slate-300 font-bold truncate max-w-full mt-0.5">
-              {typeMap[card.type] || card.type}
-            </span>
-          )}
-        </div>
-
-        {/* Bottom Bar: Type / Slot designation */}
-        <div className="text-center py-0.5 bg-black/85 text-[6.5px] text-amber-300 border-t border-white/10 uppercase font-black tracking-wider">
-          {typeMap[card.type] || card.type}
-        </div>
-      </div>
-    );
-  }
-
-  // 4. DEFAULT CARD DISPLAY
   return (
     <div
       onClick={onClick}
       onContextMenu={onContextMenu}
-      className={`w-28 h-40 flex flex-col relative rounded-md shadow-lg border-2 select-none overflow-hidden transition-all group shrink-0
-        ${sysColor}
-        ${selected ? 'ring-4 ring-yellow-400 scale-105 z-20' : ''}
-        ${playable ? 'cursor-pointer hover:border-yellow-300' : ''}
-        ${className}
-      `}
+      className={`relative shrink-0 select-none ${ready ? 'sc-anim-ready' : ''} ${className}`}
+      style={{
+        width: w,
+        height: h,
+        borderRadius: radius,
+        transform: isRested ? 'rotate(90deg) scale(0.74)' : undefined,
+        transition: 'transform 220ms var(--ease-out-quint), filter 160ms ease, box-shadow 160ms ease',
+        filter: dimmed ? 'brightness(0.55) saturate(0.45)' : isRested ? 'saturate(0.55) brightness(0.8)' : undefined,
+        boxShadow: ready ? undefined : ring,
+        opacity: isDragging ? 0.95 : 1,
+      }}
+      title={card.name}
     >
-      <div className={`absolute -top-1 -left-1 w-6 h-6 rounded-full flex items-center justify-center font-bold text-sm border border-black z-10 shadow ${badgeColor}`}>
+      {/* 進化元の重なり */}
+      {evoCount > 1 &&
+        Array.from({ length: Math.min(2, evoCount - 1) }).map((_, i) => (
+          <div
+            key={i}
+            className="absolute"
+            style={{
+              inset: 0,
+              transform: `translate(${(i + 1) * 2.5}px, ${(i + 1) * -2.5}px)`,
+              borderRadius: radius,
+              background: '#1a1d2c',
+              border: `1px solid ${el.color}88`,
+              zIndex: -1 - i,
+            }}
+          />
+        ))}
+
+      {/* 本体フレーム */}
+      <div
+        className="absolute inset-0 overflow-hidden flex flex-col"
+        style={{
+          borderRadius: radius,
+          background: `radial-gradient(120% 70% at 50% 42%, ${el.color}33 0%, ${el.deep} 55%, #07080e 100%)`,
+          border: `1.5px solid ${el.color}`,
+          boxShadow: `inset 0 0 0 1px rgba(0,0,0,0.6), inset 0 0 0 2px ${el.light}22`,
+        }}
+      >
+        {/* 名前 */}
+        <div
+          className="relative shrink-0 flex items-center"
+          style={{
+            minHeight: small ? h * 0.3 : isLarge ? 40 : h * 0.27,
+            paddingLeft: small ? gem * 0.9 : gem + 3,
+            paddingRight: isLarge && keywords.length > 0 ? 4 + Math.min(keywords.length, 4) * 24 : 4,
+            paddingTop: 2,
+            paddingBottom: 2,
+            background: 'linear-gradient(180deg, rgba(4,5,10,0.92), rgba(4,5,10,0.6))',
+            borderBottom: `1px solid ${el.color}66`,
+          }}
+        >
+          <span
+            className="font-bold text-parch-50 leading-[1.1]"
+            style={{
+              fontSize: nameSize,
+              display: '-webkit-box',
+              WebkitLineClamp: small ? 1 : 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+              wordBreak: 'break-all',
+            }}
+          >
+            {card.name}
+          </span>
+        </div>
+
+        {/* アート（魔法陣） */}
+        <div className="relative flex-1 min-h-0 flex items-center justify-center">
+          <ElementSigil element={card.system} size={Math.round(Math.min(w * (small ? 0.62 : 0.58), h * 0.38))} />
+          {hasSummoningSickness && !isRested && (
+            <div
+              className="absolute bottom-0.5 left-1/2 -translate-x-1/2 flex items-center gap-0.5 rounded-full px-1.5 whitespace-nowrap"
+              style={{ background: 'rgba(6,7,13,0.85)', border: '1px solid rgba(201,189,162,0.4)', height: Math.max(12, w * 0.19) }}
+              title="召喚したターンは攻撃できません"
+            >
+              <Moon size={Math.max(7, w * 0.11)} className="text-brass-300" />
+              <span className="font-bold text-parch-300" style={{ fontSize: Math.max(6.5, w * 0.1) }}>
+                待機
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* 種別・系譜 */}
+        {showType && (
+          <div
+            className="shrink-0 text-center truncate font-bold"
+            style={{
+              fontSize: isLarge ? 11 : Math.max(6.5, w * 0.085),
+              color: el.light,
+              opacity: 0.9,
+              padding: '1px 3px',
+              background: 'rgba(4,5,10,0.55)',
+            }}
+          >
+            {typeLine}
+          </div>
+        )}
+
+        {/* 効果テキスト（詳細表示のみ） */}
+        {showEffect && card.effectText && (
+          <div className="shrink-0 px-2.5 py-1.5 text-[10.5px] leading-snug text-parch-100 max-h-[64px] overflow-hidden" style={{ background: 'rgba(4,5,10,0.7)' }}>
+            {card.effectText}
+          </div>
+        )}
+
+        {/* ステータス */}
+        {isUnit ? (
+          <div
+            className="shrink-0 flex items-center justify-between"
+            style={{
+              height: isLarge ? 34 : small ? h * 0.24 : Math.max(18, h * 0.21),
+              padding: `0 ${Math.max(3, w * 0.06)}px`,
+              background: 'linear-gradient(180deg, #1b1f30, #07080e)',
+              borderTop: '1px solid rgba(210,171,95,0.55)',
+            }}
+          >
+            <span className="flex items-center gap-[2px] sc-num leading-none" style={{ color: atkBuff > 0 ? '#86ecdc' : atkBuff < 0 ? '#f39a90' : '#ffb4a3', fontSize: small ? statSize * 0.85 : statSize }}>
+              {!small && <Sword size={Math.max(8, statSize * 0.62)} strokeWidth={2.6} />}
+              {atk}
+            </span>
+            {!small && w >= 70 && (
+              <span
+                className="sc-num leading-none rounded-sm px-[3px]"
+                title="ブレイク数"
+                style={{ fontSize: Math.max(7, statSize * 0.58), color: '#221806', background: '#e6c77f' }}
+              >
+                {brk}
+              </span>
+            )}
+            <span className="flex items-center gap-[2px] sc-num leading-none" style={{ color: defBuff > 0 ? '#86ecdc' : defBuff < 0 ? '#f39a90' : '#a9d2ff', fontSize: small ? statSize * 0.85 : statSize }}>
+              {!small && <Shield size={Math.max(8, statSize * 0.62)} strokeWidth={2.6} />}
+              {def}
+            </span>
+          </div>
+        ) : (
+          !small && (
+            <div
+              className="shrink-0 text-center font-bold tracking-wider"
+              style={{
+                fontSize: isLarge ? 12 : Math.max(7, w * 0.1),
+                height: isLarge ? 26 : Math.max(14, h * 0.15),
+                lineHeight: `${isLarge ? 26 : Math.max(14, h * 0.15)}px`,
+                color: el.light,
+                background: 'linear-gradient(180deg, #1b1f30, #07080e)',
+                borderTop: '1px solid rgba(210,171,95,0.55)',
+              }}
+            >
+              {TYPE_LABEL[card.type] || card.type}
+            </div>
+          )
+        )}
+      </div>
+
+      {/* コスト宝石 */}
+      <div
+        className="absolute flex items-center justify-center sc-num"
+        style={{
+          left: -Math.max(2, w * 0.04),
+          top: -Math.max(2, w * 0.04),
+          width: gem,
+          height: gem,
+          borderRadius: '50%',
+          fontSize: gem * 0.6,
+          lineHeight: 1,
+          color: el.id === 'Light' ? '#2a1f04' : '#fff',
+          background: `radial-gradient(circle at 35% 30%, ${el.light} 0%, ${el.color} 45%, ${el.deep} 100%)`,
+          border: '1.5px solid #f2dea6',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.6)',
+          textShadow: el.id === 'Light' ? 'none' : '0 1px 2px rgba(0,0,0,0.7)',
+          zIndex: 2,
+        }}
+      >
         {card.cost}
       </div>
 
-      <div className="px-1 pt-3 pb-1 bg-black/50 truncate whitespace-nowrap overflow-hidden text-[10px] leading-tight font-bold tracking-tight min-h-[36px] flex items-center text-center justify-center shadow-inner text-white">
-        {card.name}
-      </div>
-
-      <div className="px-1 py-0.5 text-[8px] bg-black/30 flex justify-between uppercase font-bold tracking-wider">
-        <span>{typeMap[card.type] || card.type}</span>
-        {card.lineage && <span>{lineageMap[card.lineage] || card.lineage}</span>}
-      </div>
-
-      <div className="flex-1 flex items-center justify-center bg-black/10 relative">
-        <div className="w-10 h-10 rounded-full border-2 border-current opacity-30" />
-      </div>
-
-      {isUnit && (
-        <div className="flex justify-between items-center px-1 py-1 bg-black/70 text-[11px] font-black tracking-widest border-t border-white/10">
-          <span className="text-red-400" title="ATK">{displayAtk}</span>
-          <span className="text-yellow-400 text-[9px] bg-black px-1 rounded-sm" title="BRK">{displayBrk}</span>
-          <span className="text-blue-400" title="DEF">{displayDef}</span>
+      {/* キーワード能力 */}
+      {keywords.length > 0 && !small && (
+        <div className="absolute flex gap-[2px]" style={{ top: isLarge ? 8 : h * (small ? 0.3 : 0.27) + 2, right: isLarge ? 8 : 2, zIndex: 2 }}>
+          {keywords.slice(0, isLarge ? 4 : 2).map(k => {
+            const Icon = KEYWORD_ICON[k];
+            const s = isLarge ? 22 : Math.max(12, w * 0.19);
+            return (
+              <span
+                key={k}
+                title={KEYWORD_INFO[k].label}
+                className="flex items-center justify-center rounded-full"
+                style={{ width: s, height: s, background: '#0b0d17', border: '1px solid #86ecdc', color: '#86ecdc' }}
+              >
+                <Icon size={s * 0.62} strokeWidth={2.4} />
+              </span>
+            );
+          })}
         </div>
       )}
+
+      {/* 進化数 */}
+      {evoCount > 1 && (
+        <div
+          className="absolute sc-num rounded-full px-1 leading-none flex items-center"
+          style={{ right: -3, bottom: isUnit ? h * 0.22 : 4, height: 13, fontSize: 9, background: '#e6c77f', color: '#221806', border: '1px solid #06070d', zIndex: 3 }}
+          title={`進化 ${evoCount - 1} 段`}
+        >
+          +{evoCount - 1}
+        </div>
+      )}
+
     </div>
   );
 };

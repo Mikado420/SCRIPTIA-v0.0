@@ -85,6 +85,7 @@ function App() {
       ) : (
         <DeckManager
           onBackToBattle={handleStartBattle}
+          onBack={() => setCurrentView('BATTLE')}
         />
       )}
     </LandscapeContainer>
