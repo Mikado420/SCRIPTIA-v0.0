@@ -1,5 +1,6 @@
 import React from 'react';
-import { X, Check, Palette, Sparkles, BookOpen, Flame, Droplet, Mountain, Sun, Moon } from 'lucide-react';
+import { Check, Palette, BookOpen, Flame, Droplet, Mountain, Sun, Moon } from 'lucide-react';
+import { Modal } from './ui/Modal';
 
 export type PlaymatThemeId = 'library' | 'volcano' | 'temple' | 'jungle' | 'cathedral' | 'underworld';
 
@@ -139,112 +140,59 @@ export const PlaymatSelector: React.FC<PlaymatSelectorProps> = ({
   currentTheme,
   onSelectTheme,
 }) => {
-  if (!isOpen) return null;
-
   return (
-    <div 
-      className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[95] flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-150"
-      onClick={onClose}
+    <Modal
+      open={isOpen}
+      onClose={onClose}
+      fixed
+      zIndex={95}
+      width={560}
+      eyebrow="Playmat"
+      title="プレイマット"
+      icon={<Palette size={18} />}
+      footer={
+        <button type="button" onClick={onClose} className="sc-btn sc-btn--primary">
+          完了
+        </button>
+      }
     >
-      <div 
-        className="bg-slate-950 border border-slate-700/80 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="p-3.5 sm:p-4 border-b border-white/10 flex items-center justify-between bg-black/50">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-7 h-7 rounded-lg bg-amber-500/20 border border-amber-400 text-amber-300 flex items-center justify-center">
-              <Palette size={16} />
-            </div>
-            <div>
-              <h3 className="text-sm sm:text-base font-black text-white tracking-wide">
-                プレイマット・戦場カスタマイズ
-              </h3>
-              <p className="text-[10px] text-slate-400">
-                デュエルアリーナの背景スタイルを各系統テーマへ瞬時に変更できます
-              </p>
-            </div>
-          </div>
-
-          <button
-            onClick={onClose}
-            className="w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center transition-colors"
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        {/* Theme List Grid */}
-        <div className="flex-1 overflow-y-auto p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[60vh]">
-          {PLAYMAT_THEMES.map((theme) => {
-            const isSelected = currentTheme === theme.id;
-
-            return (
-              <div
-                key={theme.id}
-                onClick={() => {
-                  onSelectTheme(theme.id);
-                  try {
-                    localStorage.setItem('scriptia_playmat', theme.id);
-                  } catch (e) {
-                    // ignore localStorage errors
-                  }
-                }}
-                className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer relative flex flex-col justify-between select-none ${
-                  isSelected
-                    ? 'border-yellow-400 bg-slate-900/90 shadow-xl shadow-yellow-500/20 ring-1 ring-yellow-400/50'
-                    : 'border-white/10 bg-black/40 hover:border-white/30 hover:bg-slate-900/50'
-                }`}
-              >
-                {/* Visual Thumbnail */}
-                <div 
-                  className={`h-16 w-full rounded-lg mb-2.5 relative overflow-hidden border border-white/15 bg-gradient-to-br ${theme.previewGradient} flex items-center justify-center`}
-                  style={theme.bgStyle}
-                >
-                  <div className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center bg-black/30 backdrop-blur-xs">
-                    {theme.icon}
-                  </div>
-                  {isSelected && (
-                    <div className="absolute top-1.5 right-1.5 bg-yellow-400 text-slate-950 px-1.5 py-0.5 rounded-full text-[9px] font-black flex items-center space-x-0.5 shadow">
-                      <Check size={10} />
-                      <span>適用中</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Information */}
-                <div>
-                  <div className="flex items-center justify-between mb-0.5">
-                    <div className="flex items-center space-x-1.5">
-                      <span className="text-xs sm:text-sm font-black text-white">{theme.name}</span>
-                    </div>
-                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-slate-300">
-                      {theme.system}
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-slate-400 leading-tight">
-                    {theme.subtitle}
-                  </p>
-                </div>
+      <div className="grid grid-cols-2 gap-2.5">
+        {PLAYMAT_THEMES.map(theme => {
+          const isSelected = currentTheme === theme.id;
+          return (
+            <button
+              type="button"
+              key={theme.id}
+              aria-pressed={isSelected}
+              onClick={() => {
+                onSelectTheme(theme.id);
+                try {
+                  localStorage.setItem('scriptia_playmat', theme.id);
+                } catch {
+                  // ignore localStorage errors
+                }
+              }}
+              className="text-left rounded-xl p-2 transition-all active:scale-[0.98]"
+              style={{
+                border: `1px solid ${isSelected ? '#e6c77f' : 'rgba(210,171,95,0.2)'}`,
+                background: isSelected ? 'rgba(58,50,34,0.55)' : 'rgba(6,7,13,0.5)',
+                boxShadow: isSelected ? '0 0 14px rgba(230,199,127,0.3)' : undefined,
+              }}
+            >
+              <div className="h-14 w-full rounded-lg mb-2 relative overflow-hidden flex items-center justify-center" style={{ ...theme.bgStyle, border: '1px solid rgba(255,255,255,0.08)' }}>
+                <div className="w-8 h-8 rounded-full flex items-center justify-center bg-black/40">{theme.icon}</div>
+                {isSelected && (
+                  <span className="absolute top-1.5 right-1.5 px-1.5 h-[18px] rounded-full text-[10px] font-bold flex items-center gap-0.5" style={{ background: '#e6c77f', color: '#221806' }}>
+                    <Check size={10} /> 使用中
+                  </span>
+                )}
               </div>
-            );
-          })}
-        </div>
-
-        {/* Footer */}
-        <div className="p-3 border-t border-white/10 bg-black/40 flex justify-between items-center text-[10px] text-slate-400">
-          <div className="flex items-center space-x-1 text-amber-300">
-            <Sparkles size={12} />
-            <span>選択したプレイマットはブラウザに自動保存されます</span>
-          </div>
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 rounded-lg bg-yellow-500 hover:bg-yellow-400 text-slate-950 font-black text-xs transition-colors"
-          >
-            完了
-          </button>
-        </div>
+              <div className="text-[13px] font-bold text-parch-50">{theme.name}</div>
+              <div className="text-[10.5px] text-parch-500 leading-snug mt-0.5 line-clamp-2">{theme.subtitle}</div>
+            </button>
+          );
+        })}
       </div>
-    </div>
+    </Modal>
   );
 };

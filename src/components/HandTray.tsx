@@ -19,6 +19,8 @@ interface Props {
   onCardDragMove?: (clientX: number, clientY: number) => void;
   onCardDragEnd?: (card: CardInstance, clientX: number, clientY: number) => void;
   draggingCardId?: string | null;
+  /** 手札を並べられる幅（キャンバス座標） */
+  trayWidth?: number;
 }
 
 export const HandTray: React.FC<Props> = ({
@@ -30,6 +32,8 @@ export const HandTray: React.FC<Props> = ({
   onCardDragMove,
   onCardDragEnd,
   draggingCardId,
+  selectedCard,
+  trayWidth = 540,
 }) => {
   const me = state.player1;
   const isMyTurn = state.currentPlayer === 'player1';
@@ -47,14 +51,10 @@ export const HandTray: React.FC<Props> = ({
     }
   };
 
-  // Dynamic overlap for right-aligned hand fan (Duel Masters Plays style)
-  const getOverlapMargin = () => {
-    if (hand.length <= 1) return '';
-    if (hand.length <= 3) return '-ml-4';
-    if (hand.length <= 5) return '-ml-6 sm:-ml-7';
-    if (hand.length <= 7) return '-ml-7 sm:-ml-8';
-    return '-ml-8 sm:-ml-9';
-  };
+  const CARD_W = 72;
+  const n = hand.length;
+  // 手札が多い時だけ重ねる。少ない時は指で押しやすいよう間隔を空ける。
+  const overlap = n <= 1 ? 0 : Math.min(8, (trayWidth - n * CARD_W) / (n - 1));
 
   const handlePointerDown = (c: CardInstance, e: React.PointerEvent) => {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
@@ -159,65 +159,61 @@ export const HandTray: React.FC<Props> = ({
   return (
     <div
       id="hand-tray-container"
-      className="relative flex items-end justify-end pointer-events-auto h-[92px] select-none pr-1 touch-none"
+      className="relative flex items-end justify-center pointer-events-auto select-none touch-none"
+      style={{ width: trayWidth, height: 112 }}
     >
-      <div className="flex items-end justify-end">
-        {hand.map((c, i) => {
-          const isBeingDragged = draggingCardId === c.instanceId;
-          const cardData = getCard(c.cardId);
+      {hand.map((c, i) => {
+        const isBeingDragged = draggingCardId === c.instanceId;
+        const cardData = getCard(c.cardId);
+        const isSelected = selectedCard === c.instanceId;
 
-          // Check playability
-          const isPlayableNow =
-            isMyTurn &&
-            state.phase === 'ACTION' &&
-            canPlayCard(cardData, me.currentArcana, me.arcana, me.field.length);
+        const isPlayableNow =
+          isMyTurn && state.phase === 'ACTION' && canPlayCard(cardData, me.currentArcana, me.arcana, me.field.length);
+        const canPlaceArcana = isMyTurn && state.phase === 'ARCANA_PLACEMENT' && !state.flags.hasPlacedArcanaThisTurn;
 
-          const canPlaceArcana =
-            isMyTurn &&
-            !state.flags.hasPlacedArcanaThisTurn;
+        const isTriggerCard = cardData.effectText?.includes('結界が破壊された時') || cardData.id === 'BR-03';
+        const isTriggerActive = isTriggerCard && state.prompt !== null;
 
-          // Hand trigger detection (e.g. BR-03 即応兵 ゼルガン)
-          const isTriggerCard = cardData.effectText?.includes('結界が破壊された時') || cardData.id === 'BR-03';
-          const isTriggerActive = isTriggerCard && (state.prompt !== null);
+        const centerOffset = i - (n - 1) / 2;
+        const rotDeg = n > 1 ? Math.max(-6, Math.min(6, centerOffset * 1.6)) : 0;
+        const arc = Math.min(6, centerOffset * centerOffset * 0.35);
 
-          // Slight rotation or curve for fan effect if multiple cards
-          const rotDeg = Math.max(-8, Math.min(8, (i - (hand.length - 1) / 2) * 2.5));
-
-          return (
+        return (
+          <div
+            key={c.instanceId}
+            data-hand-card={c.instanceId}
+            style={{
+              zIndex: isSelected ? 60 : 10 + i,
+              marginLeft: i === 0 ? 0 : overlap,
+            }}
+            className={`relative shrink-0 select-none touch-none ${isBeingDragged ? 'opacity-25 pointer-events-none' : ''}`}
+            onPointerDown={(e) => handlePointerDown(c, e)}
+            onPointerMove={(e) => handlePointerMove(c, e)}
+            onPointerUp={(e) => handlePointerUp(c, e)}
+            onPointerCancel={(e) => handlePointerCancel(c, e)}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div
-              key={c.instanceId}
               style={{
-                zIndex: 10 + i,
+                transform: isSelected
+                  ? 'translateY(-16px) scale(1.08)'
+                  : `translateY(${arc - 2}px) rotate(${rotDeg}deg)`,
+                transformOrigin: 'bottom center',
+                transition: 'transform 180ms var(--ease-out-quint)',
               }}
-              className={`relative shrink-0 select-none group transition-all duration-200 touch-none ${
-                i > 0 ? getOverlapMargin() : ''
-              } ${isBeingDragged ? 'opacity-20 pointer-events-none' : ''} ${
-                isTriggerActive ? 'animate-hand-trigger-pulse rounded-lg z-50 ring-2 ring-yellow-400' : ''
-              }`}
-              onPointerDown={(e) => handlePointerDown(c, e)}
-              onPointerMove={(e) => handlePointerMove(c, e)}
-              onPointerUp={(e) => handlePointerUp(c, e)}
-              onPointerCancel={(e) => handlePointerCancel(c, e)}
+              className={`sc-anim-land ${isTriggerActive ? 'animate-hand-trigger-pulse rounded-lg' : ''}`}
             >
-              {/* Card Container */}
-              <div
-                style={{
-                  transform: `rotate(${rotDeg}deg) translateY(0px)`,
-                  transformOrigin: 'bottom center',
-                }}
-                className="transition-all duration-200 ease-out origin-bottom hover:-translate-y-3 hover:scale-105 hover:z-40"
-              >
-                <CardView
-                  instance={c}
-                  size="hand"
-                  playable={isPlayableNow || canPlaceArcana}
-                  onInspect={() => onInspect(cardData)}
-                />
-              </div>
+              <CardView
+                instance={c}
+                size="hand"
+                selected={isSelected}
+                playable={isPlayableNow || canPlaceArcana}
+                noDim={!isMyTurn}
+              />
             </div>
-          );
-        })}
-      </div>
+          </div>
+        );
+      })}
     </div>
   );
 };

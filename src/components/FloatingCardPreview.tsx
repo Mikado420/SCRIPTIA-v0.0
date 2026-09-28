@@ -1,6 +1,9 @@
 import React from 'react';
+import { X, Sword, Shield, Hammer } from 'lucide-react';
 import { CardTemplate } from '../types';
 import { formatCardMetaJapanese } from '../utils/cardFormatter';
+import { CardView, cardKeywords } from './CardView';
+import { KEYWORD_INFO, elementOf } from './ui/elements';
 
 export { formatCardMetaJapanese };
 
@@ -8,97 +11,96 @@ interface FloatingCardPreviewProps {
   card: CardTemplate | null;
   computedStats?: { atk: number; def: number; brk: number };
   onClose: () => void;
+  /** 下に置く操作ボタン（デッキ編成の「追加」など） */
+  actions?: React.ReactNode;
 }
 
-export const FloatingCardPreview: React.FC<FloatingCardPreviewProps> = ({
-  card,
-  computedStats,
-  onClose,
-}) => {
+/**
+ * カード詳細。左に大きなカード、右に効果・能力の説明。
+ * 背景を暗くしすぎず、盤面の状況を見ながら確認できる。
+ */
+export const FloatingCardPreview: React.FC<FloatingCardPreviewProps> = ({ card, computedStats, onClose, actions }) => {
   if (!card) return null;
-
-  const isUnitOrEvolution = card.type === 'Unit' || card.type === 'Evolution';
-  const atk = computedStats ? computedStats.atk : (card.atk ?? 0);
-  const def = computedStats ? computedStats.def : (card.def ?? 0);
-  const brk = computedStats ? computedStats.brk : (card.brk ?? 1);
+  const el = elementOf(card.system);
+  const isUnit = card.type === 'Unit' || card.type === 'Evolution';
+  const atk = computedStats ? computedStats.atk : card.atk ?? 0;
+  const def = computedStats ? computedStats.def : card.def ?? 0;
+  const brk = computedStats ? computedStats.brk : card.brk ?? 1;
+  const keywords = cardKeywords(card);
 
   return (
     <div
       id="floating-card-preview"
-      className="fixed top-3 left-3 z-[100] w-[340px] max-w-[92vw] pointer-events-auto select-none animate-in fade-in duration-150"
+      className="fixed inset-0 z-[100] flex items-center justify-start pl-3 pr-3"
+      style={{ background: 'linear-gradient(90deg, rgba(3,4,9,0.75), rgba(3,4,9,0.35) 60%, rgba(3,4,9,0.15))', animation: 'sc-fade-in 120ms ease-out both' }}
+      onClick={e => {
+        e.stopPropagation();
+        onClose();
+      }}
+      onPointerDown={e => e.stopPropagation()}
+      onPointerUp={e => e.stopPropagation()}
     >
-      <div className="bg-[#080d1a]/95 backdrop-blur-md border border-cyan-500/70 rounded-xl p-3.5 shadow-[0_0_30px_rgba(6,182,212,0.35)] text-white font-sans">
-        
-        {/* ヘッダー行 */}
-        <div className="flex items-center justify-between pb-2 mb-2 border-b border-cyan-500/20">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center font-black text-sm text-white shadow-[0_0_10px_rgba(245,158,11,0.5)]">
-              {card.cost}
-            </div>
-            <div>
-              <div className="text-base font-bold tracking-wide text-white leading-tight">
-                {card.name}
-              </div>
-              <div className="text-[11px] text-cyan-300/80 font-medium">
+      <div
+        className="sc-panel sc-corners sc-anim-slide-left flex gap-3 p-3 max-h-full"
+        style={{ width: 460, maxWidth: '100%', borderColor: `${el.color}aa` }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="shrink-0 self-start">
+          <CardView template={card} size="large" computedStats={computedStats} hideEffect />
+        </div>
+
+        <div className="flex-1 min-w-0 flex flex-col">
+          <div className="flex items-start gap-2">
+            <div className="flex-1 min-w-0">
+              <div className="sc-eyebrow" style={{ color: el.light }}>
                 {formatCardMetaJapanese(card)}
               </div>
+              <div className="sc-title text-[17px] leading-snug mt-0.5">{card.name}</div>
+            </div>
+            <button type="button" onClick={onClose} className="sc-btn sc-btn--ghost sc-btn--icon shrink-0" aria-label="閉じる">
+              <X size={16} />
+            </button>
+          </div>
+
+          <div className="sc-scroll min-h-0 flex-1 mt-2 space-y-2 pr-0.5">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="sc-chip">
+                コスト <span className="sc-num text-brass-200 text-[12px]">{card.cost}</span>
+              </span>
+              {isUnit && (
+                <>
+                  <span className="sc-chip" style={{ color: '#ffb4a3' }}>
+                    <Sword size={11} /> 攻撃 <span className="sc-num text-[12px]">{atk}</span>
+                  </span>
+                  <span className="sc-chip" style={{ color: '#a9d2ff' }}>
+                    <Shield size={11} /> 防御 <span className="sc-num text-[12px]">{def}</span>
+                  </span>
+                  <span className="sc-chip" style={{ color: '#f2dea6' }} title="攻撃が通った時に破る結界の数">
+                    <Hammer size={11} /> ブレイク <span className="sc-num text-[12px]">{brk}</span>
+                  </span>
+                </>
+              )}
+            </div>
+
+            {keywords.length > 0 && (
+              <div className="space-y-1">
+                {keywords.map(k => (
+                  <div key={k} className="flex items-start gap-2 text-[11.5px] leading-snug">
+                    <span className="shrink-0 px-1.5 rounded text-[10.5px] font-bold" style={{ background: 'rgba(79,214,194,0.14)', color: '#86ecdc', border: '1px solid rgba(134,236,220,0.45)' }}>
+                      {KEYWORD_INFO[k].label}
+                    </span>
+                    <span className="text-parch-300">{KEYWORD_INFO[k].desc}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="rounded-lg px-3 py-2.5 text-[12.5px] leading-relaxed text-parch-50 whitespace-pre-wrap" style={{ background: 'rgba(4,5,10,0.6)', border: '1px solid rgba(210,171,95,0.2)' }}>
+              {card.effectText || <span className="text-parch-500">効果を持たないユニット。</span>}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-6 h-6 rounded-full bg-slate-800/90 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-xs transition-colors border border-slate-700 cursor-pointer"
-            title="閉じる"
-          >
-            ✕
-          </button>
-        </div>
 
-        {/* スタッツバー（洗練されたTCG仕様のSVGアイコン） */}
-        {isUnitOrEvolution && (
-          <div className="grid grid-cols-3 gap-2 py-1.5 px-3 mb-2.5 bg-slate-900/90 rounded-lg border border-cyan-900/60 items-center text-center">
-            {/* ATK */}
-            <div className="flex items-center justify-center gap-1.5">
-              <svg className="w-3.5 h-3.5 text-red-400 fill-current drop-shadow-[0_0_4px_rgba(248,113,113,0.8)]" viewBox="0 0 24 24">
-                <path d="M14.5 2.5L12 5l2 2-7.5 7.5-3 0.5 0.5-3 7.5-7.5 2 2 2.5-2.5 1.5 1.5-2.5 2.5zM3 21l3.5-0.5-2-2L3 21z" />
-              </svg>
-              <span className="text-[10px] font-bold text-slate-400 tracking-wider">ATK</span>
-              <span className="text-red-400 font-black text-sm tracking-tight">{atk}</span>
-            </div>
-
-            {/* BRK */}
-            <div className="flex items-center justify-center gap-1.5 border-x border-slate-700/60">
-              <svg className="w-3.5 h-3.5 text-amber-400 fill-current drop-shadow-[0_0_4px_rgba(251,191,36,0.8)]" viewBox="0 0 24 24">
-                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-              </svg>
-              <span className="text-[10px] font-bold text-slate-400 tracking-wider">BRK</span>
-              <span className="text-amber-400 font-black text-sm tracking-tight">{brk}</span>
-            </div>
-
-            {/* DEF */}
-            <div className="flex items-center justify-center gap-1.5">
-              <svg className="w-3.5 h-3.5 text-cyan-400 fill-current drop-shadow-[0_0_4px_rgba(34,211,238,0.8)]" viewBox="0 0 24 24">
-                <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" />
-              </svg>
-              <span className="text-[10px] font-bold text-slate-400 tracking-wider">DEF</span>
-              <span className="text-cyan-400 font-black text-sm tracking-tight">{def}</span>
-            </div>
-          </div>
-        )}
-
-        {/* 効果テキスト */}
-        <div className="p-2.5 bg-slate-950/80 rounded-lg border border-slate-800/80 text-xs text-slate-200 leading-relaxed min-h-[50px] shadow-inner">
-          {card.effectText ? (
-            <span className="whitespace-pre-wrap">{card.effectText}</span>
-          ) : (
-            <span className="text-slate-500 italic">通常能力なし</span>
-          )}
-        </div>
-
-        {/* フッター */}
-        <div className="flex justify-between items-center mt-2 text-[9px] text-slate-400 font-mono">
-          <span>{card.id}</span>
-          <span>SCRIPTIA TCG v0.07</span>
+          {actions && <div className="flex gap-2 pt-2 shrink-0">{actions}</div>}
         </div>
       </div>
     </div>

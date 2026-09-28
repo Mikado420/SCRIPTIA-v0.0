@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Phase } from '../types';
-import { ChevronRight, Loader2 } from 'lucide-react';
+import { ChevronRight, Hourglass } from 'lucide-react';
 import { soundManager } from '../utils/soundManager';
 
 interface Props {
@@ -11,78 +11,123 @@ interface Props {
   hasPrompt: boolean;
   selectedCardId?: string | null;
   isHandSelected?: boolean;
+  /** まだ攻撃・プレイできるものが残っている（ターン終了を二度押しで確定させる） */
+  hasPendingActions?: boolean;
   onNextPhase: () => void;
   onArcanaCharge?: () => void;
 }
 
-export const ActionControls: React.FC<Props> = ({
-  phase,
-  isMyTurn,
-  hasPrompt,
-  onNextPhase,
-}) => {
-  const canAct = isMyTurn && !hasPrompt;
+const STEPS: { id: 'charge' | 'action' | 'end'; label: string }[] = [
+  { id: 'charge', label: 'チャージ' },
+  { id: 'action', label: '行動' },
+  { id: 'end', label: '終了' },
+];
 
-  const handleClick = () => {
+/** フェイズ表示とフェイズ進行／ターン終了ボタン */
+export const ActionControls: React.FC<Props> = ({ phase, turnCount, isMyTurn, hasPrompt, hasPendingActions, onNextPhase }) => {
+  const canAct = isMyTurn && !hasPrompt;
+  const [armed, setArmed] = useState(false);
+
+  useEffect(() => {
+    setArmed(false);
+  }, [phase, isMyTurn, turnCount]);
+
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(false), 2600);
+    return () => clearTimeout(t);
+  }, [armed]);
+
+  const current = phase === 'ARCANA_PLACEMENT' ? 'charge' : phase === 'ACTION' ? 'action' : 'end';
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (!canAct) return;
+    if (phase === 'ACTION' && hasPendingActions && !armed) {
+      soundManager.playCardTouch();
+      setArmed(true);
+      return;
+    }
     soundManager.playCardTouch();
+    setArmed(false);
     onNextPhase();
   };
 
+  let label: React.ReactNode;
+  let variant = 'sc-btn--primary';
+  if (!isMyTurn) {
+    label = (
+      <>
+        <Hourglass size={14} />
+        <span>相手のターン</span>
+      </>
+    );
+    variant = '';
+  } else if (hasPrompt) {
+    label = <span>応答を選択中</span>;
+    variant = '';
+  } else if (phase === 'ARCANA_PLACEMENT') {
+    label = (
+      <>
+        <span>行動へ進む</span>
+        <ChevronRight size={16} strokeWidth={3} />
+      </>
+    );
+    variant = 'sc-btn--confirm';
+  } else if (armed) {
+    label = <span>もう一度で終了</span>;
+    variant = 'sc-btn--warning';
+  } else {
+    label = (
+      <>
+        <span>ターン終了</span>
+        <ChevronRight size={16} strokeWidth={3} />
+      </>
+    );
+  }
+
   return (
-    <div className="flex flex-col items-center space-y-1.5 pointer-events-auto select-none shrink-0">
-      {/* 3D Cyber "TURN END" / Phase Advance Button (Duel Masters Plays Iconic Shape) */}
+    <div className="flex flex-col items-stretch gap-1.5 select-none w-full" onClick={e => e.stopPropagation()}>
+      <div className="flex items-baseline justify-between px-0.5">
+        <span className="sc-eyebrow">Turn {turnCount}</span>
+        <span className={`text-[11px] font-bold ${isMyTurn ? 'text-arcane-300' : 'text-crimson-300'}`}>
+          {isMyTurn ? 'あなたの番' : '相手の番'}
+        </span>
+      </div>
+
+      <div className="flex items-center gap-1" aria-label="フェイズ">
+        {STEPS.map((s, i) => {
+          const active = isMyTurn && s.id === current;
+          const done = isMyTurn && STEPS.findIndex(x => x.id === current) > i;
+          return (
+            <React.Fragment key={s.id}>
+              <div
+                className={`${s.id === 'charge' ? 'flex-[1.35]' : 'flex-1'} h-[22px] rounded-md flex items-center justify-center text-[10px] font-bold whitespace-nowrap tracking-tight transition-colors`}
+                style={{
+                  background: active ? 'linear-gradient(180deg,#3a3222,#231d12)' : 'rgba(6,7,13,0.7)',
+                  color: active ? '#fbf0d2' : done ? '#948a76' : '#5b5a61',
+                  border: `1px solid ${active ? '#d2ab5f' : 'rgba(210,171,95,0.18)'}`,
+                }}
+              >
+                {s.label}
+              </div>
+            </React.Fragment>
+          );
+        })}
+      </div>
+
       <button
         type="button"
         disabled={!canAct}
         onClick={handleClick}
-        className={`relative group w-22 sm:w-24 h-11 sm:h-12 rounded-2xl font-black tracking-wider transition-all select-none shadow-2xl active:scale-95 flex flex-col items-center justify-center border-2 shrink-0 ${
-          canAct
-            ? phase === 'ARCANA_PLACEMENT'
-              ? 'bg-gradient-to-b from-cyan-500 via-blue-600 to-indigo-900 border-cyan-300 text-white shadow-[0_0_15px_rgba(6,182,212,0.6)] hover:brightness-110 cursor-pointer'
-              : 'bg-gradient-to-b from-amber-300 via-yellow-500 to-amber-600 border-amber-200 text-slate-950 shadow-[0_0_20px_rgba(245,158,11,0.8)] hover:brightness-110 ring-2 ring-yellow-300/80 animate-pulse cursor-pointer'
-            : 'bg-gradient-to-b from-slate-800 via-slate-900 to-slate-950 border-slate-700/60 text-slate-500 cursor-not-allowed opacity-75'
-        }`}
-        style={{
-          boxShadow: canAct
-            ? '0 4px 0 rgba(0,0,0,0.8), 0 8px 16px rgba(0,0,0,0.6)'
-            : '0 2px 0 rgba(0,0,0,0.8)',
-          transform: canAct ? 'translateY(-2px)' : 'none',
-        }}
+        className={`sc-btn sc-btn--lg w-full ${variant} ${canAct && phase === 'ACTION' && !armed && !hasPendingActions ? 'sc-anim-breathe' : ''}`}
+        style={{ minHeight: 50 }}
       >
-        {/* Internal 3D Specular Highlight */}
-        <div className="absolute top-0.5 inset-x-2 h-1/3 rounded-t-xl bg-gradient-to-b from-white/40 to-transparent pointer-events-none" />
-
-        {/* Action Label */}
-        <div className="flex items-center space-x-1 z-10 text-[10.5px] sm:text-[11.5px] leading-tight font-black">
-          {!isMyTurn ? (
-            <>
-              <Loader2 size={12} className="animate-spin text-amber-400" />
-              <span className="font-bold tracking-tighter">WAIT</span>
-            </>
-          ) : phase === 'ARCANA_PLACEMENT' ? (
-            <>
-              <span className="drop-shadow">行動へ</span>
-              <ChevronRight size={13} className="stroke-[3]" />
-            </>
-          ) : (
-            <>
-              <span className="drop-shadow font-black">TURN END</span>
-              <ChevronRight size={13} className="stroke-[3]" />
-            </>
-          )}
-        </div>
-
-        {/* Phase Subtitle */}
-        {isMyTurn && (
-          <span className={`text-[7.5px] font-mono tracking-tighter uppercase leading-none opacity-80 ${
-            phase === 'ARCANA_PLACEMENT' ? 'text-cyan-100' : 'text-slate-950'
-          }`}>
-            {phase === 'ARCANA_PLACEMENT' ? 'CHARGE PHASE' : 'ACTION PHASE'}
-          </span>
-        )}
+        {label}
       </button>
+      <div className="h-3 text-center text-[9.5px] leading-3 text-parch-500">
+        {armed ? 'まだ行動できるユニット／カードがあります' : ''}
+      </div>
     </div>
   );
 };
-

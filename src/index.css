@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "./styles/animations.css";
+@import "./styles/theme.css";
 
 html, body, #root {
   width: 100%;
@@ -14,6 +15,15 @@ html, body, #root {
   user-select: none;
   -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
+  background: #06070d;
+  color: #ece2cb;
+  font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+input, textarea {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 @keyframes screenShake {
