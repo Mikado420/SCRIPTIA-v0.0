@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { CardInstance, CardTemplate } from '../types';
 import { getCard } from '../data/cards';
 import { CardView } from './CardView';
@@ -10,6 +10,13 @@ export interface ZoneSelectionConfig {
   promptText: string;
   canSelect: (card: CardTemplate) => boolean;
   onSelect: (instanceId: string) => void;
+  /** 選べる instanceId（指定時は canSelect より優先） */
+  selectableIds?: string[];
+  /** 指定すると「count 枚選んで確定」モードになる */
+  count?: number;
+  onConfirm?: (instanceIds: string[]) => void;
+  /** 「〜できる」効果で、選ばずに進める */
+  onDecline?: () => void;
 }
 
 interface ZoneViewerModalProps {
@@ -35,7 +42,12 @@ export const ZoneViewerModal: React.FC<ZoneViewerModalProps> = ({
   onInspectCard,
   onInspect,
 }) => {
+  const [picked, setPicked] = useState<string[]>([]);
+  useEffect(() => setPicked([]), [selectionMode, isOpen]);
+
   if (!isOpen) return null;
+  const pickMode = !!selectionMode && selectionMode.count !== undefined;
+  const need = selectionMode?.count ?? 0;
   const handleInspect = onInspectCard || onInspect || (() => {});
 
   const counts: Record<string, number> = {};
@@ -67,7 +79,15 @@ export const ZoneViewerModal: React.FC<ZoneViewerModalProps> = ({
         <div className="mb-2 px-3 py-2 rounded-lg flex items-center gap-2 text-[12px] font-bold" style={{ background: 'rgba(58,50,34,0.6)', border: '1px solid rgba(230,199,127,0.5)', color: '#fbf0d2' }}>
           <Sparkles size={14} />
           <span className="flex-1">{selectionMode.promptText}</span>
-          <span className="text-[10.5px] text-brass-300">カードをタップ</span>
+          <span className="text-[10.5px] text-brass-300 whitespace-nowrap">
+            {pickMode ? (
+              <>
+                選択中 <span className="sc-num text-[12px] text-brass-100">{picked.length}</span> / {need}
+              </>
+            ) : (
+              'カードをタップ'
+            )}
+          </span>
         </div>
       )}
 
@@ -97,14 +117,27 @@ export const ZoneViewerModal: React.FC<ZoneViewerModalProps> = ({
         <div className="grid gap-2.5 justify-items-center" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))' }}>
           {cards.map(cardInstance => {
             const template = getCard(cardInstance.cardId);
-            const isSelectable = selectionMode ? selectionMode.canSelect(template) : false;
+            const isSelectable = selectionMode
+              ? selectionMode.selectableIds
+                ? selectionMode.selectableIds.includes(cardInstance.instanceId)
+                : selectionMode.canSelect(template)
+              : false;
+            const isPicked = picked.includes(cardInstance.instanceId);
             return (
               <button
                 type="button"
                 key={cardInstance.instanceId}
                 className={`relative transition-transform active:scale-95 ${selectionMode && !isSelectable ? 'opacity-35 grayscale' : ''}`}
                 onClick={() => {
-                  if (selectionMode && isSelectable) {
+                  if (pickMode && isSelectable) {
+                    setPicked(prev =>
+                      prev.includes(cardInstance.instanceId)
+                        ? prev.filter(x => x !== cardInstance.instanceId)
+                        : prev.length < need
+                          ? [...prev, cardInstance.instanceId]
+                          : prev,
+                    );
+                  } else if (selectionMode && isSelectable) {
                     selectionMode.onSelect(cardInstance.instanceId);
                     onClose();
                   } else {
@@ -112,8 +145,8 @@ export const ZoneViewerModal: React.FC<ZoneViewerModalProps> = ({
                   }
                 }}
               >
-                <CardView instance={cardInstance} size="grid" selected={isSelectable} />
-                {isSelectable && (
+                <CardView instance={cardInstance} size="grid" selected={pickMode ? isPicked : isSelectable} />
+                {(pickMode ? isPicked : isSelectable) && (
                   <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center" style={{ background: '#e6c77f', color: '#221806' }}>
                     <Check size={12} />
                   </span>
@@ -123,7 +156,35 @@ export const ZoneViewerModal: React.FC<ZoneViewerModalProps> = ({
           })}
         </div>
       )}
-      <p className="text-[10.5px] text-parch-500 mt-3 text-center">カードをタップすると詳細を確認できます</p>
+      {pickMode ? (
+        <div className="flex items-center justify-end gap-2 mt-3">
+          {selectionMode!.onDecline && (
+            <button
+              type="button"
+              className="sc-btn sc-btn--cancel"
+              onClick={() => {
+                selectionMode!.onDecline!();
+                onClose();
+              }}
+            >
+              効果を使わない
+            </button>
+          )}
+          <button
+            type="button"
+            className="sc-btn sc-btn--primary"
+            disabled={picked.length !== need}
+            onClick={() => {
+              selectionMode!.onConfirm?.(picked);
+              onClose();
+            }}
+          >
+            {picked.length === need ? `この${need}枚で決定` : `あと${need - picked.length}枚選択`}
+          </button>
+        </div>
+      ) : (
+        <p className="text-[10.5px] text-parch-500 mt-3 text-center">カードをタップすると詳細を確認できます</p>
+      )}
     </Modal>
   );
 };
