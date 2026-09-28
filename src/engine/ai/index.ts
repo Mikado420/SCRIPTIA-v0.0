@@ -1,0 +1,10 @@
+export * from './types';
+export { buildAIView, resolveViewAction, stateSignature, otherPlayer } from './publicView';
+export type { PlayerId } from './publicView';
+export { evaluateState, unitValue, canLethal, WIN_SCORE } from './evaluation';
+export { OpponentObserver, analyzeOpponent, predictOpponentActions, emptyObservationLog } from './opponentModel';
+export { generateActions, simulate } from './simulation';
+export { decideAction, decidePromptResponse, safeFallbackAction } from './search';
+export { runAITurn } from './controller';
+export type { AITurnRunnerOptions, AITurnResult, AITurnHooks } from './controller';
+export { aiDebug, isAIDebugEnabled } from './debug';
