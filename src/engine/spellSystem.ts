@@ -2,6 +2,7 @@ import { GameState, CardInstance, CardTemplate, UnitState } from '../types';
 import { getCard } from '../data/cards';
 import { calculateUnitStats, findUnitAndOwner, checkAffinity } from './engineUtils';
 import { destroyUnit, bounceUnit, sendUnitToArcana } from './destroySystem';
+import { getCardTargetSpec, pickTargets, pickFailureLog } from './targeting';
 
 /**
  * Validates if the player can afford and cast the given card from hand.
@@ -161,6 +162,12 @@ export const resolveSpellCast = (
   const oppKey = state.currentPlayer === 'player1' ? 'player2' : 'player1';
   const opp = state[oppKey];
 
+  // 対象はカードを動かす前の盤面で検証する（候補外の対象・未指定時の先頭自動選択は採用しない）
+  const sourceCard = p.pendingCard?.instanceId === spellInstanceId ? p.pendingCard : p.hand.find(c => c.instanceId === spellInstanceId);
+  const targetSpec = sourceCard ? getCardTargetSpec(state, state.currentPlayer, sourceCard.cardId, spellInstanceId) : null;
+  const pick = targetSpec ? pickTargets(targetSpec, targetId) : null;
+  if (pick) targetId = pick.ok ? pick.ids[0] : undefined;
+
   // Retrieve pending card (or from hand if called directly)
   let card: CardInstance | null = null;
   if (p.pendingCard && p.pendingCard.instanceId === spellInstanceId) {
@@ -181,6 +188,8 @@ export const resolveSpellCast = (
   p.currentArcana = Math.max(0, p.currentArcana - tpl.cost);
   state.log.push(`${p.id} はスペル 【${tpl.name}】 を発動！`);
   state.prompt = null;
+  // 対象不在（none）の不発は startSpellCast / 下の各効果で記録済み
+  if (pick && !pick.ok && pick.reason === 'unselected') state.log.push(pickFailureLog(tpl.name, pick)!);
 
   // Execute spell effects
   if (tpl.id === 'BR-12' && targetId) {
@@ -239,7 +248,7 @@ export const resolveSpellCast = (
       }
     }
   } else if (tpl.id === 'BN-03') {
-    if (opp.domain) {
+    if (opp.domain && targetId === opp.domain.instanceId) {
       opp.archive.push(opp.domain);
       opp.domain = null;
       state.log.push(`相手のドメインが破壊されアーカイブに送られた。`);
@@ -247,13 +256,8 @@ export const resolveSpellCast = (
       state.log.push(`相手にドメインが存在しないため、効果は不発となった。`);
     }
   } else if (tpl.id === 'BN-04') {
-    let rIdx = -1;
-    if (targetId) {
-      rIdx = opp.runes.findIndex(r => r.instanceId === targetId);
-    } else if (opp.runes.length > 0) {
-      rIdx = 0;
-    }
-    if (rIdx !== -1 && opp.runes[rIdx]) {
+    const rIdx = targetId ? opp.runes.findIndex(r => r.instanceId === targetId) : -1;
+    if (rIdx !== -1) {
       const bounced = opp.runes.splice(rIdx, 1)[0];
       opp.hand.push(bounced);
       state.log.push(`相手のルーンが手札に戻された。`);

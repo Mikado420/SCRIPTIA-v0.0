@@ -12,8 +12,9 @@ import { getCard } from '../data/cards';
 import { calculateUnitStats, canPlayCard } from '../engine/engineUtils';
 import { canUnitGuard, isValidAttackTarget } from '../engine/combatEngine';
 import { getValidSpellTargets } from '../engine/spellSystem';
+import { getCardTargetSpec, getRuneTargetSpec, isForcedChoice } from '../engine/targeting';
 import { OpponentObserver, runAITurn, decidePromptResponse, aiDebug } from '../engine/ai';
-import { History, X, Shield, Sparkles, Zap, Palette, Menu, Volume2, VolumeX, Layers, ScrollText, Eye, Hand, BookOpen } from 'lucide-react';
+import { History, X, Shield, Sparkles, Zap, Palette, Menu, Volume2, VolumeX, Layers, ScrollText, Eye, Hand, BookOpen, Archive } from 'lucide-react';
 import { ELEMENTS } from './ui/elements';
 import { Modal } from './ui/Modal';
 import { Toast } from './ui/Toast';
@@ -117,14 +118,14 @@ const PlayerPlate = ({ mine, p, onOpenArchive }: { mine: boolean; p: GameState['
         </div>
         <BarrierPips count={p.barrier} danger={!mine} />
       </div>
-      <div className="flex items-center gap-1 text-[10px] font-bold text-parch-300">
-        <span className="flex items-center gap-0.5" title="手札">
-          <Hand size={11} className="text-brass-400" />
-          <span className="sc-num text-parch-50 text-[11px]">{p.hand.length}</span>
+      <div className="grid grid-cols-3 gap-1">
+        <span className="sc-plate-stat" title="手札" aria-label={`手札 ${p.hand.length}枚`}>
+          <Hand size={12} aria-hidden />
+          <span className="sc-num">{p.hand.length}</span>
         </span>
-        <span className="text-parch-500">・</span>
-        <span title="山札">
-          山札 <span className="sc-num text-parch-50 text-[11px]">{p.deck.length}</span>
+        <span className="sc-plate-stat" title="山札" aria-label={`山札 ${p.deck.length}枚`}>
+          <Layers size={12} aria-hidden />
+          <span className="sc-num">{p.deck.length}</span>
         </span>
         <button
           type="button"
@@ -132,11 +133,12 @@ const PlayerPlate = ({ mine, p, onOpenArchive }: { mine: boolean; p: GameState['
             e.stopPropagation();
             onOpenArchive();
           }}
-          className="ml-auto flex items-center gap-0.5 px-1.5 h-[20px] rounded-md active:scale-95 transition-transform"
-          style={{ background: 'rgba(6,7,13,0.8)', border: '1px solid rgba(210,171,95,0.3)' }}
-          aria-label={`${mine ? '自分' : '相手'}のアーカイブを見る`}
+          className="sc-plate-stat sc-plate-stat--btn"
+          title="アーカイブ"
+          aria-label={`${mine ? '自分' : '相手'}のアーカイブ ${p.archive.length}枚を見る`}
         >
-          アーカイブ <span className="sc-num text-parch-50 text-[11px]">{p.archive.length}</span>
+          <Archive size={12} aria-hidden />
+          <span className="sc-num">{p.archive.length}</span>
         </button>
       </div>
     </div>
@@ -162,6 +164,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
   const [showYourTurnBanner, setShowYourTurnBanner] = useState(false);
   const [turnBanner, setTurnBanner] = useState<{ mine: boolean; key: number } | null>(null);
   const [arcanaFlash, setArcanaFlash] = useState(false);
+  const [runePicks, setRunePicks] = useState<string[]>([]);
   const [clashSparkPos, setClashSparkPos] = useState<{ x: number; y: number } | null>(null);
 
   // Smart Floating HUD Card Preview State (Top-Left, No Darkening Overlay)
@@ -181,6 +184,9 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
     validTargets: string[];
     targetTypes: ('unit' | 'domain' | 'rune' | 'archive')[];
     message: string;
+    /** 進化カードの場合の進化元 */
+    evolutionTargetId?: string;
+    cutin: string;
   } | null>(null);
 
   // Hand Drag & Drop States (Play & Arcana Charge)
@@ -429,6 +435,8 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
     }
   }, [state]);
 
+  useEffect(() => setRunePicks([]), [state.prompt]);
+
   // プレイヤーのターン中にAIが応答するプロンプト（ルーン誘発・結界破壊時召喚など）
   // AIのターン中のプロンプトは runAITurn 側で処理する。
   useEffect(() => {
@@ -638,14 +646,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
         const playable = isMyTurn && state.phase === 'ACTION' && canPlayCard(tpl, me.currentArcana, me.arcana, me.field.length);
         if (playable) {
           soundManager.playEvolve();
-          triggerCutin(tpl, '進化召喚！');
-          dispatch({
-            type: 'PLAY_CARD',
-            instanceId: card.instanceId,
-            evolutionTargetId: baseUnit.instanceId,
-          });
-          showToast(`⚡ 【${tpl.name}】へ進化！`, 'success');
-          setSelectedCardId(null);
+          startTargetedPlay({ instanceId: card.instanceId, cardId }, { evolutionTargetId: baseUnit.instanceId, cutin: '進化召喚！' });
         } else {
           showToast('アルカナまたは進化条件が足りません', 'warn');
         }
@@ -708,14 +709,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
 
           if (targetUnit) {
             soundManager.playEvolve();
-            triggerCutin(tpl, '進化召喚！');
-            dispatch({
-              type: 'PLAY_CARD',
-              instanceId: card.instanceId,
-              evolutionTargetId: targetUnit.instanceId,
-            });
-            showToast(`⚡ 【${tpl.name}】へ進化召喚！`, 'success');
-            setSelectedCardId(null);
+            startTargetedPlay(card, { evolutionTargetId: targetUnit.instanceId, cutin: '進化召喚！' });
           } else {
             showToast('自軍フィールドに進化元のユニットがいません', 'warn');
           }
@@ -1197,13 +1191,14 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
     if (pendingSpell) {
       if (pendingSpell.validTargets.includes(id)) {
         soundManager.playCardSwipe();
-        triggerCutin(pendingSpell.template, '呪文詠唱！');
+        triggerCutin(pendingSpell.template, pendingSpell.cutin);
         dispatch({
           type: 'PLAY_CARD',
           instanceId: pendingSpell.cardInstance.instanceId,
           targetId: id,
+          evolutionTargetId: pendingSpell.evolutionTargetId,
         });
-        showToast(`【${pendingSpell.template.name}】を発動しました！`, 'success');
+        showToast(`【${pendingSpell.template.name}】の効果を発動しました`, 'success');
         setPendingSpell(null);
         setSelectedCardId(null);
         return;
@@ -1250,27 +1245,6 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
           return;
         }
 
-        // Recovery Unit effects (BW-08)
-        if (tpl.id === 'BW-08' && me.archive.some(c => ['Spell', 'Rune'].includes(getCard(c.cardId).type))) {
-          setZoneModal({
-            isOpen: true,
-            title: '【予言者 アナスタシア】登場時効果：回収カードを選択',
-            zoneType: 'archive',
-            cards: me.archive.filter(c => ['Spell', 'Rune'].includes(getCard(c.cardId).type)),
-            isOpponent: false,
-            selectionMode: {
-              promptText: '召喚と同時に手札に戻すスペルまたはルーンを選択',
-              canSelect: (cTpl) => cTpl.type === 'Spell' || cTpl.type === 'Rune',
-              onSelect: (chosenId) => {
-                triggerCutin(tpl, '登場時効果発動！');
-                dispatch({ type: 'PLAY_CARD', instanceId: inHand.instanceId, targetId: chosenId });
-                setSelectedCardId(null);
-              },
-            },
-          });
-          return;
-        }
-
         setSelectedCardId(id === selectedCardId ? null : id);
         return;
       }
@@ -1284,9 +1258,8 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
           if (selHand) {
             const evoTpl = getCard(selHand.cardId);
             if (evoTpl.type === 'Evolution') {
-              triggerCutin(evoTpl, '進化召喚！');
-              dispatch({ type: 'PLAY_CARD', instanceId: selectedCardId, evolutionTargetId: id });
-              setSelectedCardId(null);
+              soundManager.playEvolve();
+              startTargetedPlay(selHand, { evolutionTargetId: id, cutin: '進化召喚！' });
               return;
             }
           }
@@ -1370,94 +1343,77 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
     dispatch({ type: 'START_GAME' });
   };
 
-  const handlePlaySpell = (cardInst: CardInstance) => {
+  /**
+   * 対象指定の共通入口（スペル・登場時・進化時）。
+   * 候補0 → 対象なしでプレイ（エンジンが不発を記録）、選択の余地がない → そのまま確定、
+   * それ以外 → 盤面の対象をタップ（ユニット/ルーン/ドメイン）またはアーカイブから選択。
+   */
+  const startTargetedPlay = (cardInst: CardInstance, opts: { evolutionTargetId?: string; cutin?: string }) => {
     const tpl = getCard(cardInst.cardId);
-
-    // 【BW-13】聖者の祈り：アーカイブからこのカード以外のスペルかルーン1枚を回収
-    if (tpl.id === 'BW-13') {
-      const validArchiveCards = me.archive.filter(c => {
-        if (c.cardId === 'BW-13') return false;
-        const t = getCard(c.cardId);
-        return t.type === 'Spell' || t.type === 'Rune';
-      });
-      if (validArchiveCards.length === 0) {
-        soundManager.playCardSwipe();
-        triggerCutin(tpl, '呪文詠唱！');
-        dispatch({ type: 'PLAY_CARD', instanceId: cardInst.instanceId });
-        showToast('アーカイブに対象が存在しないため不発となりました', 'warn');
-        setSelectedCardId(null);
-        setPendingSpell(null);
+    if (opts.evolutionTargetId && tpl.evolutionTarget) {
+      const base = me.field.find(u => u.instanceId === opts.evolutionTargetId);
+      if (!base || getCard(base.cards[0].cardId).lineage !== tpl.evolutionTarget) {
+        showToast('このユニットは進化元にできません', 'warn');
         return;
       }
+    }
+    const spec = getCardTargetSpec(state, 'player1', tpl.id, cardInst.instanceId);
+    const play = (targetId?: string) => {
+      if (tpl.type === 'Spell') soundManager.playCardSwipe();
+      if (opts.cutin) triggerCutin(tpl, opts.cutin);
+      dispatch({ type: 'PLAY_CARD', instanceId: cardInst.instanceId, targetId, evolutionTargetId: opts.evolutionTargetId });
+      setSelectedCardId(null);
+      setPendingSpell(null);
+    };
+
+    if (!spec) {
+      play();
+      if (tpl.type === 'Spell') showToast(`【${tpl.name}】を発動`, 'success');
+      return;
+    }
+    if (spec.candidates.length === 0) {
+      play();
+      if (!spec.optional) showToast(`対象が存在しないため【${tpl.name}】の効果は不発`, 'warn');
+      return;
+    }
+    if (isForcedChoice(spec)) {
+      play(spec.candidates.join(','));
+      return;
+    }
+    if (spec.zone === 'archive') {
       setZoneModal({
         isOpen: true,
-        title: '【聖者の祈り】：回収するスペルまたはルーンを選択',
+        title: `【${tpl.name}】${spec.message}`,
         zoneType: 'archive',
-        cards: validArchiveCards,
+        cards: me.archive.filter(c => spec.candidates.includes(c.instanceId)),
         isOpponent: false,
         selectionMode: {
-          promptText: '手札に加えるカードを選択してください',
-          canSelect: (cTpl) => (cTpl.type === 'Spell' || cTpl.type === 'Rune') && cTpl.id !== 'BW-13',
-          onSelect: (chosenId) => {
-            soundManager.playCardSwipe();
-            triggerCutin(tpl, '呪文詠唱！');
-            dispatch({ type: 'PLAY_CARD', instanceId: cardInst.instanceId, targetId: chosenId });
-            showToast(`【${tpl.name}】を発動しました！`, 'success');
-            setSelectedCardId(null);
-            setPendingSpell(null);
-          },
+          promptText: `${spec.message}（${spec.count}枚）`,
+          canSelect: () => true,
+          selectableIds: spec.candidates,
+          count: spec.count,
+          onSelect: () => {},
+          onConfirm: ids => play(ids.join(',')),
+          onDecline: spec.optional ? () => play() : undefined,
         },
       });
-      return;
-    }
-
-    // 対象が必要なスペル判定（BR-12, BB-12, BW-12, BG-13, BD-13, BN-03, BN-04）
-    const targetSpellIds = ['BR-12', 'BB-12', 'BW-12', 'BG-13', 'BD-13', 'BN-03', 'BN-04'];
-    if (tpl.targetReq || targetSpellIds.includes(tpl.id)) {
-      const validTargetIds = getValidSpellTargets(state, tpl.id, cardInst.instanceId);
-
-      // 有効な対象が盤面に存在しない場合は不発として安全に解決（フリーズ防止）
-      if (validTargetIds.length === 0) {
-        soundManager.playCardSwipe();
-        triggerCutin(tpl, '呪文詠唱！');
-        dispatch({ type: 'PLAY_CARD', instanceId: cardInst.instanceId });
-        showToast(`対象が存在しないため【${tpl.name}】の効果は不発となりました`, 'warn');
-        setSelectedCardId(null);
-        setPendingSpell(null);
-        return;
-      }
-
-      // 対象選択モードへ移行
-      let targetTypes: ('unit' | 'domain' | 'rune' | 'archive')[] = ['unit'];
-      let targetDesc = '対象の相手ユニットを選択してください';
-      if (tpl.id === 'BN-03') {
-        targetTypes = ['domain'];
-        targetDesc = '破壊する相手のドメインを選択してください';
-      } else if (tpl.id === 'BN-04') {
-        targetTypes = ['rune'];
-        targetDesc = '手札に戻す相手のルーンを選択してください';
-      }
-
-      setPendingSpell({
-        cardInstance: cardInst,
-        template: tpl,
-        validTargets: validTargetIds,
-        targetTypes,
-        message: `【${tpl.name}】：${targetDesc}`,
-      });
       setSelectedCardId(null);
-      showToast(`【${tpl.name}】の対象を選択してください`, 'info');
       return;
     }
-
-    // 対象不要のスペル（BR-13, BB-13, BG-12, BD-12 等）：即時発動
-    soundManager.playCardSwipe();
-    triggerCutin(tpl, '呪文詠唱！');
-    dispatch({ type: 'PLAY_CARD', instanceId: cardInst.instanceId });
-    showToast(`【${tpl.name}】を発動！`, 'success');
+    setPendingSpell({
+      cardInstance: cardInst,
+      template: tpl,
+      validTargets: spec.candidates,
+      targetTypes: [spec.zone],
+      message: `【${tpl.name}】：${spec.message}`,
+      evolutionTargetId: opts.evolutionTargetId,
+      cutin: opts.cutin ?? '登場時効果発動！',
+    });
     setSelectedCardId(null);
-    setPendingSpell(null);
+    showToast(`【${tpl.name}】の対象を選択してください`, 'info');
   };
+
+  const handlePlaySpell = (cardInst: CardInstance) => startTargetedPlay(cardInst, { cutin: '呪文詠唱！' });
 
   const handlePlayHandCard = (instanceId: string) => {
     const cardInst = me.hand.find(c => c.instanceId === instanceId);
@@ -1474,9 +1430,9 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
       if (tpl.type === 'Unit') {
         setSummonRippleSlot({ isOpponent: false, slotIdx: me.field.length });
         setTimeout(() => setSummonRippleSlot(null), 800);
-        if (tpl.effectText && (tpl.keywords?.includes('Rush') || tpl.effectText.includes('登場時'))) {
-          triggerCutin(tpl, '登場時効果発動！');
-        }
+        const hasEntryEffect = tpl.keywords?.includes('Rush') || !!getCardTargetSpec(state, 'player1', tpl.id, instanceId);
+        startTargetedPlay(cardInst, { cutin: hasEntryEffect ? '登場時効果発動！' : undefined });
+        return;
       }
     }
     dispatch({ type: 'PLAY_CARD', instanceId });
@@ -1556,10 +1512,6 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
       showToast('進化させる自分のユニットをタップ', 'info');
       return;
     }
-    if (tpl.id === 'BW-08' && me.archive.some(a => ['Spell', 'Rune'].includes(getCard(a.cardId).type))) {
-      handleCardClick(instanceId, { stopPropagation: () => {} } as React.MouseEvent);
-      return;
-    }
     if (tpl.type === 'Unit') soundManager.playSummonUnit();
     handlePlayHandCard(instanceId);
   };
@@ -1592,6 +1544,10 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
   const selectedAttacker = selectedCardId ? me.field.find(u => u.instanceId === selectedCardId) : undefined;
   const selectedHandTpl = selectedHandCard ? getCard(selectedHandCard.cardId) : null;
   const myPrompt = state.prompt && state.prompt.playerId === 'player1' && state.prompt.type !== 'TARGET_SELECTION' ? state.prompt : null;
+  // 自分のルーン発動時の対象（選択の余地がある時だけプレイヤーに選ばせる）
+  const myRuneCard = myPrompt?.type === 'RUNE_TRIGGER' ? me.runes.find(r => r.instanceId === myPrompt.sourceId) : undefined;
+  const myRuneSpec = myRuneCard ? getRuneTargetSpec(state, 'player1', myRuneCard.cardId) : null;
+  const runeNeedsPick = !!myRuneSpec && myRuneSpec.candidates.length > 0 && !isForcedChoice(myRuneSpec);
   const attackLockedOnPlayer = attackDrag?.lockedTarget?.type === 'player';
   const oppBarrierTargetable = canDirectAttack || attackLockedOnPlayer || (!!attackDrag && isValidAttackTarget(state, attackDrag.attackerId, undefined));
 
@@ -1631,8 +1587,8 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
   const resolveBoardTarget = (targetId: string, successText: string) => {
     soundManager.playCardSwipe();
     if (pendingSpell) {
-      triggerCutin(pendingSpell.template, '魔法発動');
-      dispatch({ type: 'PLAY_CARD', instanceId: pendingSpell.cardInstance.instanceId, targetId });
+      triggerCutin(pendingSpell.template, pendingSpell.cutin);
+      dispatch({ type: 'PLAY_CARD', instanceId: pendingSpell.cardInstance.instanceId, targetId, evolutionTargetId: pendingSpell.evolutionTargetId });
       setPendingSpell(null);
       showToast(successText, 'success');
     } else if (state.prompt?.type === 'TARGET_SELECTION') {
@@ -2053,7 +2009,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
                 const stats = unit ? calculateUnitStats(state, 'player1', unit) : null;
                 const isSelected = !!unit && selectedCardId === unit.instanceId;
                 const isTarget = unit ? isTargetValidForSelected('unit', unit) : false;
-                const isEvoBase = !!unit && selectedHandTpl?.type === 'Evolution' && myActionPhase;
+                const isEvoBase = !!unit && selectedHandTpl?.type === 'Evolution' && myActionPhase && (!selectedHandTpl.evolutionTarget || getCard(unit.cards[0].cardId).lineage === selectedHandTpl.evolutionTarget);
                 const isReady = !!unit && readyAttackers.some(r => r.instanceId === unit.instanceId);
                 const isDraggingThisAttacker = !!unit && attackDrag?.attackerId === unit.instanceId;
                 const isAttacking = !!unit && activeAttackerId === unit.instanceId;
@@ -2304,7 +2260,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
           <Modal
             open
             dismissible={false}
-            width={myPrompt.type === 'GUARD' ? 440 : 340}
+            width={myPrompt.type === 'GUARD' || runeNeedsPick ? 440 : 340}
             eyebrow={myPrompt.type === 'GUARD' ? '守護' : myPrompt.type === 'RUNE_TRIGGER' ? 'ルーン' : '発動'}
             title={myPrompt.type === 'GUARD' ? '守護しますか？' : myPrompt.type === 'RUNE_TRIGGER' ? 'ルーン発動' : '効果を発動しますか？'}
             icon={myPrompt.type === 'GUARD' ? <Shield size={20} /> : <Zap size={20} />}
@@ -2320,8 +2276,13 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
                   <button type="button" className="sc-btn sc-btn--cancel" onClick={() => handlePrompt(false)}>
                     発動しない
                   </button>
-                  <button type="button" className="sc-btn sc-btn--arcane" onClick={() => handlePrompt(true)}>
-                    発動する
+                  <button
+                    type="button"
+                    className="sc-btn sc-btn--arcane"
+                    disabled={runeNeedsPick && runePicks.length !== myRuneSpec!.count}
+                    onClick={() => handlePrompt(true, runeNeedsPick ? runePicks.join(',') : undefined)}
+                  >
+                    {runeNeedsPick && runePicks.length !== myRuneSpec!.count ? `対象を${myRuneSpec!.count - runePicks.length}体選択` : '発動する'}
                   </button>
                 </>
               )
@@ -2331,7 +2292,48 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
               const attacker = myPrompt.attackerId ? opp.field.find(u => u.instanceId === myPrompt.attackerId) : undefined;
               const guarders = me.field.filter(u => canUnitGuard(u));
               if (myPrompt.type !== 'GUARD') {
-                return <p className="text-[13px] leading-relaxed text-parch-50">{myPrompt.text || myPrompt.message}</p>;
+                return (
+                  <>
+                    <p className="text-[13px] leading-relaxed text-parch-50">{myPrompt.text || myPrompt.message}</p>
+                    {runeNeedsPick && (
+                      <div className="mt-2.5">
+                        <div className="flex items-center justify-between text-[11.5px] font-bold text-brass-200 mb-1.5">
+                          <span>{myRuneSpec!.message}</span>
+                          <span>
+                            選択中 <span className="sc-num text-[12px] text-brass-100">{runePicks.length}</span> / {myRuneSpec!.count}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {opp.field
+                            .filter(u => myRuneSpec!.candidates.includes(u.instanceId))
+                            .map(u => {
+                              const picked = runePicks.includes(u.instanceId);
+                              return (
+                                <button
+                                  key={u.instanceId}
+                                  type="button"
+                                  aria-pressed={picked}
+                                  onClick={() =>
+                                    setRunePicks(prev =>
+                                      prev.includes(u.instanceId)
+                                        ? prev.filter(x => x !== u.instanceId)
+                                        : prev.length < myRuneSpec!.count
+                                          ? [...prev, u.instanceId]
+                                          : prev,
+                                    )
+                                  }
+                                  className="rounded-lg p-1 active:scale-95 transition-transform"
+                                  style={{ border: `1px solid ${picked ? '#e6c77f' : 'rgba(210,171,95,0.25)'}`, background: picked ? 'rgba(58,50,34,0.6)' : 'transparent' }}
+                                >
+                                  <CardView instance={u.cards[0]} size="field" computedStats={calculateUnitStats(state, 'player2', u)} selected={picked} />
+                                </button>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
               }
               return (
                 <div className="flex gap-3 items-start">

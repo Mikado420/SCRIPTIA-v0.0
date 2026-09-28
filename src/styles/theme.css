@@ -313,6 +313,32 @@
   }
   .sc-scroll::-webkit-scrollbar { width: 4px; }
   .sc-scroll::-webkit-scrollbar-thumb { background: rgba(210, 171, 95, 0.35); border-radius: 4px; }
+
+  /* プレイヤー情報のアイコン＋数字（手札・山札・アーカイブ） */
+  .sc-plate-stat {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    height: 20px;
+    min-width: 0;
+    border-radius: 6px;
+    background: rgba(6, 7, 13, 0.7);
+    border: 1px solid rgba(210, 171, 95, 0.18);
+    color: var(--color-brass-400);
+    white-space: nowrap;
+  }
+  .sc-plate-stat .sc-num {
+    font-size: 11.5px;
+    line-height: 1;
+    color: var(--color-parch-50);
+  }
+  .sc-plate-stat--btn {
+    border-color: rgba(210, 171, 95, 0.45);
+    transition: transform 120ms ease, border-color 120ms ease;
+  }
+  .sc-plate-stat--btn:hover { border-color: rgba(230, 199, 127, 0.8); }
+  .sc-plate-stat--btn:active { transform: scale(0.95); }
 }
 
 /* ---------------------------------------------------------------------

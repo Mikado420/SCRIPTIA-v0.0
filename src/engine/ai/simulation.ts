@@ -1,4 +1,5 @@
 import { GameAction, GameState, PlayerState, UnitState } from '../../types';
+import { getRuneTargetSpec, isForcedChoice, targetCombinations } from '../targeting';
 import { gameReducer } from '../gameEngine';
 import { calculateUnitStats, checkAffinity } from '../engineUtils';
 import { canUnitGuard, isValidAttackTarget } from '../combatEngine';
@@ -72,7 +73,16 @@ export function promptOptions(s: GameState): GameAction[] {
       const guarders = owner.field.filter(u => canUnitGuard(u)).map(u => u.instanceId);
       return [{ type: 'RESOLVE_GUARD' }, ...guarders.map(id => ({ type: 'RESOLVE_GUARD', guarderId: id }) as GameAction)];
     }
-    case 'RUNE_TRIGGER':
+    case 'RUNE_TRIGGER': {
+      // 対象を取るルーンは、合法な対象の組み合わせを応答として列挙する（選択は既存の評価に任せる）
+      const rune = owner.runes.find(r => r.instanceId === p.sourceId);
+      const spec = rune ? getRuneTargetSpec(s, p.playerId as PlayerId, rune.cardId) : null;
+      const combos = spec && !isForcedChoice(spec) ? targetCombinations(spec) : [];
+      const applies: GameAction[] = combos.length > 0
+        ? combos.map(targetId => ({ type: 'RESOLVE_TRIGGER', apply: true, targetId }) as GameAction)
+        : [{ type: 'RESOLVE_TRIGGER', apply: true }];
+      return [...applies, { type: 'RESOLVE_TRIGGER', apply: false }];
+    }
     case 'TRIGGER':
       return [
         { type: 'RESOLVE_TRIGGER', apply: true },

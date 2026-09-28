@@ -14,6 +14,7 @@ import {
   cancelSpellCast,
   resolveSpellCast,
 } from './spellSystem';
+import { getCardTargetSpec, getRuneTargetSpec, pickTargets, pickFailureLog, TargetPick } from './targeting';
 
 let instanceCounter = 0;
 export const createInstance = (cardId: string): CardInstance => ({
@@ -205,6 +206,10 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
         let targetUnit = action.evolutionTargetId
           ? p.field.find(u => u.instanceId === action.evolutionTargetId)
           : undefined;
+        // 指定された進化元が進化条件（系譜）を満たさない場合は進化できない
+        if (targetUnit && template.evolutionTarget && getCard(targetUnit.cards[0].cardId).lineage !== template.evolutionTarget) {
+          return newState;
+        }
         if (!targetUnit) {
           if (template.evolutionTarget) {
             targetUnit = p.field.find(u => getCard(u.cards[0].cardId).lineage === template.evolutionTarget);
@@ -214,6 +219,15 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
         }
         if (!targetUnit) return newState;
       }
+
+      // 登場時・進化時効果の対象（カード定義 → 候補 → 選択された targetId の検証）
+      const effectSpec = getCardTargetSpec(newState, newState.currentPlayer, template.id, card.instanceId);
+      const effectPick: TargetPick | null = effectSpec ? pickTargets(effectSpec, action.targetId) : null;
+      const chosen = effectPick?.ok ? effectPick.ids : [];
+      const logPickFailure = () => {
+        const msg = effectPick ? pickFailureLog(template.name, effectPick) : null;
+        if (msg) newState.log.push(msg);
+      };
 
       p.currentArcana -= template.cost;
       p.hand.splice(cardIdx, 1);
@@ -244,23 +258,16 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
 
         // On Summon Triggers (Safe resolution without freezing if no targets)
         if (template.id === 'BR-08') {
-          const validTargets = opp.field.filter(u => calculateUnitStats(newState, oppKey, u).def <= 40);
-          if (validTargets.length > 0) {
-            const targetToDestroy = (action.targetId && validTargets.some(u => u.instanceId === action.targetId))
-              ? action.targetId
-              : validTargets[0].instanceId;
-            newState = destroyUnit(newState, targetToDestroy);
+          if (chosen.length > 0) {
+            newState = destroyUnit(newState, chosen[0]);
             newState.log.push(`【クリムゾン・ドラゴン】の登場時効果！DEF40以下の相手ユニットを破壊した。`);
           } else {
-            newState.log.push(`【クリムゾン・ドラゴン】の登場時効果：対象となるDEF40以下の相手ユニットが存在しないため不発。`);
+            logPickFailure();
           }
         }
         if (template.id === 'BB-09') {
-          if (action.targetId && opp.field.some(u => u.instanceId === action.targetId)) {
-            newState = bounceUnit(newState, action.targetId);
-          } else if (opp.field.length > 0) {
-            newState = bounceUnit(newState, opp.field[0].instanceId);
-          }
+          if (chosen.length > 0) newState = bounceUnit(newState, chosen[0]);
+          else logPickFailure();
         }
         if (['BB-04', 'BW-07'].includes(template.id) && p.deck.length > 0) p.hand.push(p.deck.pop()!);
         if (template.id === 'BG-04' && p.deck.length > 0) {
@@ -269,35 +276,24 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
           p.currentArcana++;
         }
         if (template.id === 'BW-05') {
-          if (action.targetId) {
-            const t = findUnitAndOwner(newState, action.targetId);
-            if (t) t.unit.isRested = true;
-          } else if (opp.field.length > 0) {
-            opp.field[0].isRested = true;
-          }
+          const t = chosen.length > 0 ? findUnitAndOwner(newState, chosen[0]) : null;
+          if (t) t.unit.isRested = true;
+          else logPickFailure();
         }
         if (template.id === 'BD-06' && opp.hand.length > 0) {
           const randIdx = Math.floor(Math.random() * opp.hand.length);
           opp.archive.push(opp.hand.splice(randIdx, 1)[0]);
         }
-        if (template.id === 'BW-08' && action.targetId) {
-          const aIdx = p.archive.findIndex(c => c.instanceId === action.targetId);
-          if (aIdx !== -1) {
-            const [retrieved] = p.archive.splice(aIdx, 1);
-            p.hand.push(retrieved);
-            newState.log.push(`【予言者 アナスタシア】の効果でアーカイブから 【${getCard(retrieved.cardId).name}】 を手札に戻した。`);
-          }
-        }
-        if (template.id === 'BD-10' && action.targetId) {
-          const targetIds = action.targetId.split(',');
-          targetIds.forEach(tId => {
+        if (template.id === 'BW-08' || template.id === 'BD-10') {
+          chosen.forEach(tId => {
             const aIdx = p.archive.findIndex(c => c.instanceId === tId);
             if (aIdx !== -1) {
               const [retrieved] = p.archive.splice(aIdx, 1);
               p.hand.push(retrieved);
-              newState.log.push(`【常闇の悪魔 バグラザード】の効果でアーカイブから 【${getCard(retrieved.cardId).name}】 を手札に戻した。`);
+              newState.log.push(`【${template.name}】の効果でアーカイブから 【${getCard(retrieved.cardId).name}】 を手札に戻した。`);
             }
           });
+          if (chosen.length === 0) logPickFailure();
         }
       } else if (template.type === 'Evolution') {
         let targetUnit = action.evolutionTargetId
@@ -318,15 +314,11 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
         newState.log.push(`${p.id} は 【${template.name}】 に進化した。`);
 
         if (template.id === 'BD-11') {
-          const validTargets = opp.field.filter(u => calculateUnitStats(newState, oppKey, u).def <= 80);
-          if (validTargets.length > 0) {
-            const targetToDestroy = (action.targetId && validTargets.some(u => u.instanceId === action.targetId))
-              ? action.targetId
-              : validTargets[0].instanceId;
-            newState = destroyUnit(newState, targetToDestroy);
+          if (chosen.length > 0) {
+            newState = destroyUnit(newState, chosen[0]);
             newState.log.push(`【傀儡魔王 ネクロシア】の登場時効果！DEF80以下の相手ユニットを破壊した。`);
           } else {
-            newState.log.push(`【傀儡魔王 ネクロシア】の登場時効果：対象となるDEF80以下の相手ユニットが存在しないため不発。`);
+            logPickFailure();
           }
         }
       } else if (template.type === 'Rune') {
@@ -465,20 +457,21 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
               }
             });
           }
-          if (tpl.id === 'BB-14') {
-            if (opP.field.length > 0) newState = bounceUnit(newState, opP.field[0].instanceId);
-          }
-          if (tpl.id === 'BG-14') {
-            if (opP.field.length > 0) {
-              newState = sendUnitToArcana(newState, opP.field[0].instanceId, pt.playerId as 'player1' | 'player2');
-            }
-          }
-          if (tpl.id === 'BW-14') {
-            if (opP.field.length > 0) opP.field[0].isRested = true;
-            if (opP.field.length > 1) opP.field[1].isRested = true;
-          }
-          if (tpl.id === 'BD-14') {
-            if (opP.field.length > 0) newState = destroyUnit(newState, opP.field[0].instanceId);
+          const runeSpec = getRuneTargetSpec(newState, pt.playerId as 'player1' | 'player2', tpl.id);
+          if (runeSpec) {
+            const runePick = pickTargets(runeSpec, action.targetId);
+            const ids = runePick.ok ? runePick.ids : [];
+            const failure = pickFailureLog(tpl.name, runePick);
+            if (failure) newState.log.push(failure);
+            ids.forEach(id => {
+              if (tpl.id === 'BB-14') newState = bounceUnit(newState, id);
+              if (tpl.id === 'BG-14') newState = sendUnitToArcana(newState, id, pt.playerId as 'player1' | 'player2');
+              if (tpl.id === 'BD-14') newState = destroyUnit(newState, id);
+              if (tpl.id === 'BW-14') {
+                const u = findUnitAndOwner(newState, id);
+                if (u) u.unit.isRested = true;
+              }
+            });
           }
         }
       }
