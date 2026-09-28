@@ -2,8 +2,8 @@ import React from 'react';
 import { X, Sword, Shield, Hammer } from 'lucide-react';
 import { CardTemplate } from '../types';
 import { formatCardMetaJapanese } from '../utils/cardFormatter';
-import { CardView, cardKeywords } from './CardView';
-import { KEYWORD_INFO, elementOf } from './ui/elements';
+import { CardView } from './CardView';
+import { elementOf } from './ui/elements';
 
 export { formatCardMetaJapanese };
 
@@ -26,7 +26,6 @@ export const FloatingCardPreview: React.FC<FloatingCardPreviewProps> = ({ card, 
   const atk = computedStats ? computedStats.atk : card.atk ?? 0;
   const def = computedStats ? computedStats.def : card.def ?? 0;
   const brk = computedStats ? computedStats.brk : card.brk ?? 1;
-  const keywords = cardKeywords(card);
 
   return (
     <div
@@ -82,22 +81,11 @@ export const FloatingCardPreview: React.FC<FloatingCardPreviewProps> = ({ card, 
               )}
             </div>
 
-            {keywords.length > 0 && (
-              <div className="space-y-1">
-                {keywords.map(k => (
-                  <div key={k} className="flex items-start gap-2 text-[11.5px] leading-snug">
-                    <span className="shrink-0 px-1.5 rounded text-[10.5px] font-bold" style={{ background: 'rgba(79,214,194,0.14)', color: '#86ecdc', border: '1px solid rgba(134,236,220,0.45)' }}>
-                      {KEYWORD_INFO[k].label}
-                    </span>
-                    <span className="text-parch-300">{KEYWORD_INFO[k].desc}</span>
-                  </div>
-                ))}
+            {card.effectText && (
+              <div className="rounded-lg px-3 py-2.5 text-[12.5px] leading-relaxed text-parch-50 whitespace-pre-wrap" style={{ background: 'rgba(4,5,10,0.6)', border: '1px solid rgba(210,171,95,0.2)' }}>
+                {card.effectText}
               </div>
             )}
-
-            <div className="rounded-lg px-3 py-2.5 text-[12.5px] leading-relaxed text-parch-50 whitespace-pre-wrap" style={{ background: 'rgba(4,5,10,0.6)', border: '1px solid rgba(210,171,95,0.2)' }}>
-              {card.effectText || <span className="text-parch-500">効果を持たないユニット。</span>}
-            </div>
           </div>
 
           {actions && <div className="flex gap-2 pt-2 shrink-0">{actions}</div>}

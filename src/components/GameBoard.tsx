@@ -14,7 +14,7 @@ import { canUnitGuard, isValidAttackTarget } from '../engine/combatEngine';
 import { getValidSpellTargets } from '../engine/spellSystem';
 import { getCardTargetSpec, getRuneTargetSpec, isForcedChoice } from '../engine/targeting';
 import { OpponentObserver, runAITurn, decidePromptResponse, aiDebug } from '../engine/ai';
-import { History, X, Shield, Sparkles, Zap, Palette, Menu, Volume2, VolumeX, Layers, ScrollText, Eye, Hand, BookOpen } from 'lucide-react';
+import { History, X, Shield, Sparkles, Zap, Palette, Menu, Volume2, VolumeX, Layers, ScrollText, Eye, Hand, BookOpen, Archive } from 'lucide-react';
 import { ELEMENTS } from './ui/elements';
 import { Modal } from './ui/Modal';
 import { Toast } from './ui/Toast';
@@ -118,13 +118,14 @@ const PlayerPlate = ({ mine, p, onOpenArchive }: { mine: boolean; p: GameState['
         </div>
         <BarrierPips count={p.barrier} danger={!mine} />
       </div>
-      <div className="flex items-center gap-1 text-[10px] font-bold text-parch-300 whitespace-nowrap">
-        <span className="flex items-center gap-0.5" title="手札">
-          <Hand size={11} className="text-brass-400" />
-          <span className="sc-num text-parch-50 text-[11px]">{p.hand.length}</span>
+      <div className="grid grid-cols-3 gap-1">
+        <span className="sc-plate-stat" title="手札" aria-label={`手札 ${p.hand.length}枚`}>
+          <Hand size={12} aria-hidden />
+          <span className="sc-num">{p.hand.length}</span>
         </span>
-        <span title="山札">
-          山札 <span className="sc-num text-parch-50 text-[11px]">{p.deck.length}</span>
+        <span className="sc-plate-stat" title="山札" aria-label={`山札 ${p.deck.length}枚`}>
+          <Layers size={12} aria-hidden />
+          <span className="sc-num">{p.deck.length}</span>
         </span>
         <button
           type="button"
@@ -132,11 +133,12 @@ const PlayerPlate = ({ mine, p, onOpenArchive }: { mine: boolean; p: GameState['
             e.stopPropagation();
             onOpenArchive();
           }}
-          className="ml-auto flex items-center gap-0.5 px-1 h-[20px] rounded-md active:scale-95 transition-transform text-[9.5px]"
-          style={{ background: 'rgba(6,7,13,0.8)', border: '1px solid rgba(210,171,95,0.3)' }}
-          aria-label={`${mine ? '自分' : '相手'}のアーカイブを見る`}
+          className="sc-plate-stat sc-plate-stat--btn"
+          title="アーカイブ"
+          aria-label={`${mine ? '自分' : '相手'}のアーカイブ ${p.archive.length}枚を見る`}
         >
-          アーカイブ <span className="sc-num text-parch-50 text-[11px]">{p.archive.length}</span>
+          <Archive size={12} aria-hidden />
+          <span className="sc-num">{p.archive.length}</span>
         </button>
       </div>
     </div>
