@@ -317,7 +317,18 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
         targetUnit.hasSummoningSickness = false;
         newState.log.push(`${p.id} は 【${template.name}】 に進化した。`);
 
-        if (template.id === 'BD-11' && action.targetId) newState = destroyUnit(newState, action.targetId);
+        if (template.id === 'BD-11') {
+          const validTargets = opp.field.filter(u => calculateUnitStats(newState, oppKey, u).def <= 80);
+          if (validTargets.length > 0) {
+            const targetToDestroy = (action.targetId && validTargets.some(u => u.instanceId === action.targetId))
+              ? action.targetId
+              : validTargets[0].instanceId;
+            newState = destroyUnit(newState, targetToDestroy);
+            newState.log.push(`【傀儡魔王 ネクロシア】の登場時効果！DEF80以下の相手ユニットを破壊した。`);
+          } else {
+            newState.log.push(`【傀儡魔王 ネクロシア】の登場時効果：対象となるDEF80以下の相手ユニットが存在しないため不発。`);
+          }
+        }
       } else if (template.type === 'Rune') {
         if (p.runes.length >= 2) return newState;
         p.runes.push(card);
