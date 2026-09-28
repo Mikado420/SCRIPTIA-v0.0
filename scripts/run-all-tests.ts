@@ -417,13 +417,24 @@ import { ScriptiaAIEngine, toBoardUnit } from '../src/engine/aiEngine';
     { instanceId: 'h-bomb', cardId: 'BR-08' }, // cost 5
     { instanceId: 'h-fodder', cardId: 'BR-03' }, // cost 2
   ];
+  // 相手の場に登場時効果で破壊できる脅威（DEF30の BR-06）がいる。
+  // ※対象がいない場合は「登場時効果を温存して次ターンに出す」方が良いため、
+  //   結果ベース評価のAIはチャージしない（その判断も正しい）。
+  state.player2.barrier = 3;
+  state.player1.field = [{
+    instanceId: 'p-threat',
+    cards: [{ instanceId: 'c-threat', cardId: 'BR-06' }], // 50 ATK / 30 DEF
+    isRested: false,
+    hasSummoningSickness: false,
+    modifiers: [],
+  }];
 
   const plan = ScriptiaAIEngine.planBestTurn(state);
   assert(
     plan.chargeCard !== null &&
     plan.chargeCard.instanceId === 'h-fodder' &&
     plan.plays.some(p => p.card.id === 'BR-08'),
-    'テスト17: 的確なチャージ＆大型展開（チャージして5コストのクリムゾン・ドラゴンを召喚）'
+    'テスト17: 的確なチャージ＆大型展開（チャージして5コストのクリムゾン・ドラゴンを召喚し脅威を除去）'
   );
 }
 
@@ -437,6 +448,9 @@ import { ScriptiaAIEngine, toBoardUnit } from '../src/engine/aiEngine';
     { instanceId: 'a1', cardId: 'BR-01' },
     { instanceId: 'a2', cardId: 'BR-01' },
   ];
+  // 使用可能アルカナはアルカナ枚数と一致させる（ルール上、コスト支払いは currentArcana で行う）
+  state.player2.currentArcana = 2;
+  state.player2.maxArcana = 2;
   state.player2.hand = [
     { instanceId: 'h1', cardId: 'BR-01' }, // cost 2
     { instanceId: 'h2', cardId: 'BR-02' }, // cost 2
