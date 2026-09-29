@@ -48,7 +48,7 @@ export const ActionControls: React.FC<Props> = ({ phase, turnCount, isMyTurn, ha
       setArmed(true);
       return;
     }
-    soundManager.playCardTouch();
+    soundManager.playCardConfirm();
     setArmed(false);
     onNextPhase();
   };
