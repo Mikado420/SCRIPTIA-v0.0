@@ -20,6 +20,7 @@ import { Modal } from './ui/Modal';
 import { Toast } from './ui/Toast';
 import { CardBack } from './CardView';
 import { soundManager } from '../utils/soundManager';
+import { detectSoundEvents } from '../utils/soundEvents';
 
 interface Props {
   state: GameState;
@@ -359,30 +360,23 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
     return () => clearTimeout(t);
   }, [state.currentPlayer, state.turnCount]);
 
-  // Rune Trigger Sound Effect
+  // ゲーム状態に由来するSEは、盤面の変化からここで一括して判定する（発火元を一本化）。
+  // 召喚・進化・スペル・攻撃命中・守護・破壊・手札に戻す・アーカイブ・結界・ルーン・勝敗。
+  const prevSoundStateRef = useRef(state);
   useEffect(() => {
-    if (state.prompt?.type === 'RUNE_TRIGGER' || state.prompt?.type === 'TRIGGER') {
-      soundManager.playRuneTrigger();
-    }
-  }, [state.prompt?.type]);
-
-  // Track field unit destructions to trigger card destroy SE
-  const prevP1FieldLength = useRef(me.field.length);
-  const prevP2FieldLength = useRef(opp.field.length);
-  useEffect(() => {
-    if (me.field.length < prevP1FieldLength.current || opp.field.length < prevP2FieldLength.current) {
-      soundManager.playCardDestroy();
-    }
-    prevP1FieldLength.current = me.field.length;
-    prevP2FieldLength.current = opp.field.length;
-  }, [me.field.length, opp.field.length]);
+    const prev = prevSoundStateRef.current;
+    prevSoundStateRef.current = state;
+    detectSoundEvents(prev, state).forEach(cue => {
+      if (cue.delay > 0) setTimeout(() => soundManager.playEvent(cue.id), cue.delay);
+      else soundManager.playEvent(cue.id);
+    });
+  }, [state]);
 
   // Track shield breaks to trigger crystal glass shatter sound and animations
   const prevOppBarrier = useRef(opp.barrier);
   useEffect(() => {
     if (opp.barrier < prevOppBarrier.current) {
       const brokenIdx = opp.barrier;
-      soundManager.playShieldBreak();
       setShatteringOppShieldIdx(brokenIdx);
       setIsScreenShaking(true);
       setTimeout(() => setIsScreenShaking(false), 420);
@@ -395,7 +389,6 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
   useEffect(() => {
     if (me.barrier < prevPlayerBarrier.current) {
       const brokenIdx = me.barrier;
-      soundManager.playShieldBreak();
       setShatteringPlayerShieldIdx(brokenIdx);
       setIsScreenShaking(true);
       setTimeout(() => setIsScreenShaking(false), 420);
@@ -467,10 +460,8 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
         const guarderId = response.guarderId;
         const g = cur.player2.field.find(u => u.instanceId === guarderId);
         if (g) showToast(`相手が【${getCard(g.cards[0].cardId).name}】で守護を発動！`, 'info');
-        soundManager.playShieldBreak();
       } else if (response.type === 'RESOLVE_TRIGGER' && response.apply) {
         showToast('相手がルーン効果を発動！', 'warn');
-        soundManager.playRuneTrigger();
       }
       dispatch(response);
     }, 700);
@@ -485,7 +476,6 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
       if (c) {
         setAiThinkingText('魔力を集中');
         showToast(`相手が【${getCard(c.cardId).name}】をアルカナに配置した`, 'info');
-        soundManager.playManaCharge();
       }
     } else if (action.type === 'PLAY_CARD') {
       const c = ai.hand.find(h => h.instanceId === action.instanceId);
@@ -493,13 +483,10 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
       const t = getCard(c.cardId);
       setAiThinkingText(t.type === 'Spell' ? '魔法発動' : t.type === 'Evolution' ? '進化召喚' : '召喚');
       if (t.type === 'Evolution') {
-        soundManager.playEvolve();
         showToast(`相手が【${t.name}】へ進化`, 'warn');
       } else if (t.type === 'Spell') {
-        soundManager.playCardSwipe();
         showToast(`相手が【${t.name}】を発動`, 'info');
       } else {
-        soundManager.playSummonUnit();
         if (t.type === 'Unit') {
           setSummonRippleSlot({ isOpponent: true, slotIdx: ai.field.length });
           setTimeout(() => setSummonRippleSlot(null), 800);
@@ -514,8 +501,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
       const tName = target ? getCard(target.cards[0].cardId).name : null;
       setAiThinkingText('攻撃');
       setActiveAttackerId(action.attackerId);
-      setActiveAttackerId(action.attackerId);
-      soundManager.playAttackLock();
+      soundManager.playAttackStart();
       showToast(tName ? `【${aName}】が【${tName}】を攻撃` : `【${aName}】があなたの結界を攻撃`, 'warn');
     } else if (action.type === 'NEXT_PHASE' && st.phase === 'ACTION') {
       setAiThinkingText('ターン終了');
@@ -545,7 +531,6 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
         onBeforeAction: (action, _label, st) => presentAIAction(action, st),
         onAfterAction: action => {
           if (action.type === 'DECLARE_ATTACK') {
-            soundManager.playAttackClash();
             setIsScreenShaking(true);
             setTimeout(() => setIsScreenShaking(false), 380);
             setActiveAttackerId(null);
@@ -645,7 +630,6 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
       if (tpl.type === 'Evolution') {
         const playable = isMyTurn && state.phase === 'ACTION' && canPlayCard(tpl, me.currentArcana, me.arcana, me.field.length);
         if (playable) {
-          soundManager.playEvolve();
           startTargetedPlay({ instanceId: card.instanceId, cardId }, { evolutionTargetId: baseUnit.instanceId, cutin: '進化召喚！' });
         } else {
           showToast('アルカナまたは進化条件が足りません', 'warn');
@@ -679,8 +663,10 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
       if (isMyTurn && state.phase === 'ARCANA_PLACEMENT' && !state.flags.hasPlacedArcanaThisTurn) {
         handlePlaceHandArcana(card.instanceId);
       } else if (isMyTurn && state.flags.hasPlacedArcanaThisTurn) {
+        soundManager.playError();
         showToast('このターンはすでにアルカナを配置しました', 'warn');
       } else if (isMyTurn) {
+        soundManager.playError();
         showToast('アルカナはアルカナ配置フェイズにだけ配置できます', 'warn');
       }
     } else if (zone === 'field') {
@@ -708,20 +694,15 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
           }
 
           if (targetUnit) {
-            soundManager.playEvolve();
             startTargetedPlay(card, { evolutionTargetId: targetUnit.instanceId, cutin: '進化召喚！' });
           } else {
             showToast('自軍フィールドに進化元のユニットがいません', 'warn');
           }
         } else {
-          if (tpl.type === 'Unit') {
-            soundManager.playSummonUnit();
-          } else if (tpl.type === 'Spell') {
-            soundManager.playCardSwipe();
-          }
           handlePlayHandCard(card.instanceId);
         }
       } else {
+        soundManager.playError();
         showToast(playBlockReason(tpl) ?? 'いまは使用できません', 'warn');
       }
     }
@@ -801,7 +782,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
       setClashSparkPos(targetPos);
       setTimeout(() => setClashSparkPos(null), 420);
     }
-    soundManager.playAttackClash();
+    soundManager.playAttackStart();
     setTimeout(() => {
       setIsScreenShaking(true);
       setTimeout(() => setIsScreenShaking(false), 380);
@@ -1190,7 +1171,6 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
     // 0. Pending Spell Target Resolution (v0.07 Fix)
     if (pendingSpell) {
       if (pendingSpell.validTargets.includes(id)) {
-        soundManager.playCardSwipe();
         triggerCutin(pendingSpell.template, pendingSpell.cutin);
         dispatch({
           type: 'PLAY_CARD',
@@ -1203,6 +1183,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
         setSelectedCardId(null);
         return;
       } else {
+        soundManager.playError();
         showToast('そのカードは対象に選択できません', 'warn');
         return;
       }
@@ -1226,7 +1207,6 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
     // Target selection mode active prompt
     if (state.prompt?.type === 'TARGET_SELECTION') {
       if (state.prompt.validTargets.includes(id)) {
-        soundManager.playCardSwipe();
         dispatch({ type: 'RESOLVE_SPELL_TARGET', targetId: id });
         setSelectedCardId(null);
         return;
@@ -1258,7 +1238,6 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
           if (selHand) {
             const evoTpl = getCard(selHand.cardId);
             if (evoTpl.type === 'Evolution') {
-              soundManager.playEvolve();
               startTargetedPlay(selHand, { evolutionTargetId: id, cutin: '進化召喚！' });
               return;
             }
@@ -1332,7 +1311,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
   };
 
   const handleRestartGame = () => {
-    soundManager.playCardSwipe();
+    soundManager.playCardConfirm();
     setPreviewCard(null);
     setPreviewStats(undefined);
     setSelectedCardId(null);
@@ -1353,13 +1332,13 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
     if (opts.evolutionTargetId && tpl.evolutionTarget) {
       const base = me.field.find(u => u.instanceId === opts.evolutionTargetId);
       if (!base || getCard(base.cards[0].cardId).lineage !== tpl.evolutionTarget) {
+        soundManager.playError();
         showToast('このユニットは進化元にできません', 'warn');
         return;
       }
     }
     const spec = getCardTargetSpec(state, 'player1', tpl.id, cardInst.instanceId);
     const play = (targetId?: string) => {
-      if (tpl.type === 'Spell') soundManager.playCardSwipe();
       if (opts.cutin) triggerCutin(tpl, opts.cutin);
       dispatch({ type: 'PLAY_CARD', instanceId: cardInst.instanceId, targetId, evolutionTargetId: opts.evolutionTargetId });
       setSelectedCardId(null);
@@ -1381,6 +1360,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
       return;
     }
     if (spec.zone === 'archive') {
+      soundManager.playCardConfirm();
       setZoneModal({
         isOpen: true,
         title: `【${tpl.name}】${spec.message}`,
@@ -1410,6 +1390,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
       cutin: opts.cutin ?? '登場時効果発動！',
     });
     setSelectedCardId(null);
+    soundManager.playCardConfirm();
     showToast(`【${tpl.name}】の対象を選択してください`, 'info');
   };
 
@@ -1441,7 +1422,6 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
 
   const handlePlaceHandArcana = (instanceId: string) => {
     const c = me.hand.find(h => h.instanceId === instanceId);
-    soundManager.playManaCharge();
     dispatch({ type: 'PLACE_ARCANA', instanceId });
     if (c) showToast(`【${getCard(c.cardId).name}】をアルカナに配置した`, 'success');
     setArcanaFlash(true);
@@ -1504,6 +1484,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
     }
     const reason = playBlockReason(tpl);
     if (reason) {
+      soundManager.playError();
       showToast(reason, 'warn');
       return;
     }
@@ -1512,7 +1493,6 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
       showToast('進化させる自分のユニットをタップ', 'info');
       return;
     }
-    if (tpl.type === 'Unit') soundManager.playSummonUnit();
     handlePlayHandCard(instanceId);
   };
 
@@ -1585,7 +1565,6 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
   // 小さな部品
   // ----------------------------------------------------------------------
   const resolveBoardTarget = (targetId: string, successText: string) => {
-    soundManager.playCardSwipe();
     if (pendingSpell) {
       triggerCutin(pendingSpell.template, pendingSpell.cutin);
       dispatch({ type: 'PLAY_CARD', instanceId: pendingSpell.cardInstance.instanceId, targetId, evolutionTargetId: pendingSpell.evolutionTargetId });
@@ -1991,6 +1970,7 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
                       onClick={e => {
                         e.stopPropagation();
                         setPendingSpell(null);
+                        soundManager.playCancel();
                         showToast('発動をやめました', 'info');
                       }}
                       className="ml-1 px-2 h-[18px] rounded-full text-[10px] font-bold"
@@ -2136,7 +2116,10 @@ export const GameBoard: React.FC<Props> = ({ state, dispatch, onInspect, onOpenD
                 type="button"
                 className="sc-btn sc-btn--ghost sc-btn--icon"
                 style={{ minHeight: 32, width: 32, borderRadius: 999 }}
-                onClick={() => setSelectedCardId(null)}
+                onClick={() => {
+                  soundManager.playCancel();
+                  setSelectedCardId(null);
+                }}
                 aria-label="選択をやめる"
               >
                 <X size={14} />
